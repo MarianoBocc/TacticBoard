@@ -199,11 +199,13 @@ export default function BenchPanel({
                       }
                     }
                   }}
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    onEditPlayer?.(player.number, false);
-                  }}
-                  title={`Doble clic para cambiar nombre de #${player.number}`}
+                  title={
+                    onCourt
+                      ? `En cancha (#${player.number}) - Toca para enviar al banco`
+                      : isCourtFull
+                      ? `Cancha completa (5) - Quita un jugador primero`
+                      : `En banco (#${player.number}) - Toca para ingresar a cancha`
+                  }
                 >
                   <div className="player-number-circle">
                     <span className="number-val">#{player.number}</span>

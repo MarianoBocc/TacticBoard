@@ -25,8 +25,7 @@ export default function Court({
   selectedScratchItem = null,
   onCourtClick,
   isEraserActive = false,
-  onDeleteAction,
-  onEditPlayer
+  onDeleteAction
 }) {
   const containerRef = useRef(null);
   const [draggingPlayer, setDraggingPlayer] = useState(null);
@@ -44,8 +43,8 @@ export default function Court({
   const isPointerDownRef = useRef(false);
   const pointerStartPosRef = useRef({ x: 0, y: 0, time: 0 });
   
-  // Custom double tap tracker for tablets (supports both team players and opponents)
-  const lastTapRef = useRef({ time: 0, playerNumber: null, isOpponent: false });
+  // Custom double tap tracker for tablets
+  const lastTapRef = useRef({ time: 0, playerNumber: null });
 
   // ViewBox dimensions:
   // Half-court: 1000 x 900
@@ -74,27 +73,35 @@ export default function Court({
     };
   }, []);
 
-  // Handle double click / double tap: opens rename modal for that player number
-  const handlePlayerInteraction = (playerNumber, isOpponent = false) => {
+  // Handle double click / double tap for passing
+  const handlePlayerInteraction = (playerNumber, e) => {
+    // If we're in ball assign mode, just assign ball
     if (isAssigningBall) {
       onAssignBall(playerNumber);
-      return true;
+      return;
     }
 
     const now = Date.now();
     const lastTap = lastTapRef.current;
 
-    // Check if double tap on the same player within 380ms
-    if (lastTap.playerNumber === playerNumber && lastTap.isOpponent === isOpponent && (now - lastTap.time) < 380) {
-      setDraggingPlayer(null);
-      setDraggingOpponent(null);
-      onEditPlayer?.(playerNumber, isOpponent);
-      lastTapRef.current = { time: 0, playerNumber: null, isOpponent: false };
-      return true;
+    // Check if double tap on the same player within 360ms
+    if (lastTap.playerNumber === playerNumber && (now - lastTap.time) < 360) {
+      if (designTool === 'setup') {
+        // In setup mode, double tap directly assigns the ball to this player!
+        onAssignBall?.(playerNumber);
+        lastTapRef.current = { time: 0, playerNumber: null };
+        return;
+      }
+      // Find current ball carrier
+      const ballCarrier = courtPlayers.find(p => p.hasBall);
+      if (ballCarrier && ballCarrier.number !== playerNumber) {
+        onPlayerPass(ballCarrier.number, playerNumber);
+      }
+      lastTapRef.current = { time: 0, playerNumber: null };
+      return;
     }
 
-    lastTapRef.current = { time: now, playerNumber, isOpponent };
-    return false;
+    lastTapRef.current = { time: now, playerNumber };
   };
 
   // Helper to calculate distance from a point to a line segment (for eraser tool)
@@ -143,9 +150,6 @@ export default function Court({
     if (isPlaying || isEraserActive) return;
     e.stopPropagation();
 
-    const isDoubleTap = handlePlayerInteraction(opp.number, true);
-    if (isDoubleTap) return;
-
     e.target.setPointerCapture?.(e.pointerId);
     setDraggingOpponent(opp.id);
     setOpponentDragOrigin({ x: opp.x, y: opp.y });
@@ -157,8 +161,7 @@ export default function Court({
     if (isPlaying || isEraserActive) return;
     
     // Check for double click interaction
-    const isDoubleTap = handlePlayerInteraction(player.number, false);
-    if (isDoubleTap) return;
+    handlePlayerInteraction(player.number, e);
 
     if (isAssigningBall) return;
 
@@ -957,8 +960,10 @@ export default function Court({
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
-                  setDraggingPlayer(null);
-                  onEditPlayer?.(player.number, false);
+                  const carrier = courtPlayers.find(p => p.hasBall);
+                  if (carrier && carrier.number !== player.number) {
+                    onPlayerPass(carrier.number, player.number);
+                  }
                 }}
                 style={{ cursor: isAssigningBall ? 'pointer' : 'grab' }}
               >
@@ -1071,11 +1076,6 @@ export default function Court({
                 className={`player-svg-node opponent-node ${oppHasBall ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''}`}
                 transform={`translate(${svgPos.x}, ${svgPos.y})`}
                 onPointerDown={(e) => handleOpponentPointerDown(opp, e)}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  setDraggingOpponent(null);
-                  onEditPlayer?.(opp.number, true);
-                }}
                 style={{ cursor: isEraserActive ? 'crosshair' : 'grab' }}
               >
                 {/* Touch hit area */}

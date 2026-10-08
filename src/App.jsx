@@ -805,7 +805,6 @@ export default function App() {
             onCourtClick={handleCourtClick}
             isEraserActive={isEraserActive}
             onDeleteAction={handleDeleteAction}
-            onEditPlayer={handleOpenEditPlayer}
           />
 
           {/* Paleta Scratch: Abajo en Media Cancha, a la Derecha en Cancha Completa */}
@@ -823,7 +822,6 @@ export default function App() {
               onToggleEraser={() => setIsEraserActive(prev => !prev)}
               onClearDrawings={handleClearDrawings}
               onReturnToBench={handleReturnToBench}
-              onEditPlayer={handleOpenEditPlayer}
             />
           )}
         </main>

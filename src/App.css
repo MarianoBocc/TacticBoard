@@ -2351,17 +2351,17 @@
 }
 
 .bench-edit-name-btn {
-  background: transparent;
-  border: none;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-muted);
-  padding: 2px;
-  margin-left: 4px;
+  padding: 3px 5px;
+  margin-left: 6px;
   border-radius: 4px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  opacity: 0.65;
+  opacity: 0.75;
   transition: all 0.15s ease;
 }
 
@@ -2369,6 +2369,7 @@
 .bench-edit-name-btn:hover {
   opacity: 1;
   color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.4);
   background: rgba(74, 222, 128, 0.15);
 }
 

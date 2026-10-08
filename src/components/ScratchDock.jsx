@@ -13,8 +13,7 @@ export default function ScratchDock({
   isEraserActive = false,
   onToggleEraser,
   onClearDrawings,
-  onReturnToBench,
-  onEditPlayer
+  onReturnToBench
 }) {
   const onCourtNumbers = new Set(courtPlayers.map(p => p.number));
   const onCourtOpponents = new Set(opponentPlayers.map(o => o.number));
@@ -96,16 +95,12 @@ export default function ScratchDock({
                     onSelectItem({ type: 'opponent', number: num });
                   }
                 }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onEditPlayer?.(num, true);
-                }}
                 title={
                   isSelected
-                    ? `Rival #${num} seleccionado: toca en la cancha para colocarlo • Doble clic para cambiar nombre`
+                    ? `Rival #${num} seleccionado: toca en la cancha para colocarlo`
                     : isPlaced
-                    ? `Rival #${num} en cancha: toca para moverlo • Doble clic para cambiar nombre`
-                    : `Colocar Rival #${num} en la cancha • Doble clic para cambiar nombre`
+                    ? `Rival #${num} en cancha: toca para moverlo`
+                    : `Colocar Rival #${num} en la cancha`
                 }
               >
                 <span className="chip-number">{num}</span>
@@ -165,16 +160,12 @@ export default function ScratchDock({
                     onSelectItem({ type: 'player', number: player.number });
                   }
                 }}
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onEditPlayer?.(player.number, false);
-                }}
                 title={
                   isSelected
-                    ? `#${player.number} (${player.name || 'Sin nombre'}) seleccionado: toca en la cancha para ubicarlo • Doble clic para cambiar nombre`
+                    ? `#${player.number} (${player.name || 'Sin nombre'}) seleccionado: toca en la cancha para ubicarlo`
                     : isPlaced
-                    ? `#${player.number} (${player.name || 'Sin nombre'}) (En cancha) - Toca para reubicarlo • Doble clic para cambiar nombre`
-                    : `#${player.number} (${player.name || 'Sin nombre'}) (En banco) - Toca para colocarlo • Doble clic para cambiar nombre`
+                    ? `#${player.number} (${player.name || 'Sin nombre'}) (En cancha) - Toca para reubicarlo`
+                    : `#${player.number} (${player.name || 'Sin nombre'}) (En banco) - Toca para colocarlo`
                 }
               >
                 <span className="chip-number">{player.number}</span>
