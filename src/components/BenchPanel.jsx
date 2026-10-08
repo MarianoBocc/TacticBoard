@@ -9,7 +9,8 @@ import {
   X,
   Layers,
   RotateCcw,
-  Eye
+  Eye,
+  Pencil
 } from 'lucide-react';
 
 export default function BenchPanel({
@@ -28,7 +29,8 @@ export default function BenchPanel({
   onApplyFormation,
   onOpenSaveFormationModal,
   onDeleteCustomFormation,
-  onClearCourt
+  onClearCourt,
+  onEditPlayer
 }) {
   const onCourtCount = courtPlayers.length;
   const isCourtFull = onCourtCount >= 5;
@@ -197,6 +199,11 @@ export default function BenchPanel({
                       }
                     }
                   }}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    onEditPlayer?.(player.number, false);
+                  }}
+                  title={`Doble clic para cambiar nombre de #${player.number}`}
                 >
                   <div className="player-number-circle">
                     <span className="number-val">#{player.number}</span>
@@ -207,6 +214,17 @@ export default function BenchPanel({
                     <div className="player-name-row">
                       <span className="player-role">{player.position}</span>
                       <span className="player-tag">{player.name}</span>
+                      <button
+                        type="button"
+                        className="bench-edit-name-btn"
+                        title={`Editar nombre de #${player.number}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditPlayer?.(player.number, false);
+                        }}
+                      >
+                        <Pencil size={11} />
+                      </button>
                     </div>
                     <span className="player-status-label">
                       {onCourt ? (isAssigningBall ? '👉 Toca para dar balón' : 'En Cancha') : 'En Banco'}

@@ -14,11 +14,80 @@ import ControlsBar from './components/ControlsBar';
 import PlaybookModal from './components/PlaybookModal';
 import SaveFormationModal from './components/SaveFormationModal';
 import ScratchDock from './components/ScratchDock';
+import EditPlayerModal from './components/EditPlayerModal';
 
 const STORAGE_KEY = 'tacticapp_saved_plays_v1';
 const FORMATIONS_STORAGE_KEY = 'tacticapp_custom_formations_v1';
+const ROSTER_STORAGE_KEY = 'tacticapp_custom_roster_v1';
 
 export default function App() {
+  // Dynamic Roster state with persistence in localStorage
+  const [roster, setRoster] = useState(() => {
+    try {
+      const stored = localStorage.getItem(ROSTER_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (err) {
+      console.error("Error reading custom roster from localStorage:", err);
+    }
+    return INITIAL_ROSTER;
+  });
+
+  // Sync roster with localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(ROSTER_STORAGE_KEY, JSON.stringify(roster));
+    } catch (err) {
+      console.error("Error saving roster to localStorage:", err);
+    }
+  }, [roster]);
+
+  // Modal to edit player name / position
+  const [editingPlayerInfo, setEditingPlayerInfo] = useState(null); // { number, isOpponent } | null
+
+  const handleOpenEditPlayer = (playerNumber, isOpponent = false) => {
+    setEditingPlayerInfo({ number: playerNumber, isOpponent });
+  };
+
+  const handleCloseEditPlayer = () => {
+    setEditingPlayerInfo(null);
+  };
+
+  const handleSavePlayerName = (number, { name, position }, isOpponent) => {
+    if (isOpponent) {
+      setOpponentPlayers(prev => {
+        const exists = prev.some(o => o.number === number);
+        if (exists) {
+          return prev.map(o => o.number === number ? { ...o, name } : o);
+        }
+        return [...prev, { id: number, number, x: 50, y: 30, hasBall: false, name }];
+      });
+    } else {
+      setRoster(prev => prev.map(p => {
+        if (p.number === number) {
+          return { ...p, name, position: position || p.position };
+        }
+        return p;
+      }));
+
+      setCourtPlayers(prev => prev.map(p => {
+        if (p.number === number) {
+          return { ...p, name };
+        }
+        return p;
+      }));
+
+      setInitialPlayers(prev => prev.map(p => {
+        if (p.number === number) {
+          return { ...p, name };
+        }
+        return p;
+      }));
+    }
+  };
+
   // Court appearance
   const [courtType, setCourtType] = useState('half'); // 'half' | 'full'
   const [theme, setTheme] = useState('parquet'); // 'parquet' | 'slate'
@@ -705,6 +774,7 @@ export default function App() {
             theme={theme}
             courtPlayers={courtPlayers}
             opponentPlayers={opponentPlayers}
+            roster={roster}
             actions={actions}
             activeStep={mode === 'animation' ? activeStep : -1}
             isPlaying={isPlaying}
@@ -728,13 +798,14 @@ export default function App() {
             onCourtClick={handleCourtClick}
             isEraserActive={isEraserActive}
             onDeleteAction={handleDeleteAction}
+            onEditPlayer={handleOpenEditPlayer}
           />
 
           {/* Paleta Scratch: Abajo en Media Cancha, a la Derecha en Cancha Completa */}
           {mode === 'scratch' && (
             <ScratchDock
               courtType={courtType}
-              roster={INITIAL_ROSTER}
+              roster={roster}
               courtPlayers={courtPlayers}
               opponentPlayers={opponentPlayers}
               freeBallPos={freeBallPos}
@@ -745,13 +816,14 @@ export default function App() {
               onToggleEraser={() => setIsEraserActive(prev => !prev)}
               onClearDrawings={handleClearDrawings}
               onReturnToBench={handleReturnToBench}
+              onEditPlayer={handleOpenEditPlayer}
             />
           )}
         </main>
 
         {/* Bench Sidebar (Collapsible Drawer on Mobile) */}
         <BenchPanel
-          roster={INITIAL_ROSTER}
+          roster={roster}
           courtPlayers={courtPlayers}
           formations={allFormations}
           currentFormationId={currentFormationId}
@@ -768,6 +840,7 @@ export default function App() {
           onSaveCurrentAsFormation={handleSaveCurrentAsFormation}
           onDeleteCustomFormation={handleDeleteCustomFormation}
           onClearCourt={handleClearCourt}
+          onEditPlayer={handleOpenEditPlayer}
         />
       </div>
 
@@ -840,6 +913,32 @@ export default function App() {
         courtPlayers={courtPlayers}
         onSaveFormation={handleSaveCurrentAsFormation}
       />
+
+      {/* Edit Player Name / Number Modal */}
+      {editingPlayerInfo && (
+        <EditPlayerModal
+          isOpen={true}
+          onClose={handleCloseEditPlayer}
+          player={(() => {
+            if (editingPlayerInfo.isOpponent) {
+              const opp = opponentPlayers.find(o => o.number === editingPlayerInfo.number);
+              return {
+                number: editingPlayerInfo.number,
+                name: opp?.name || `Rival #${editingPlayerInfo.number}`,
+                position: 'DEF',
+                isOpponent: true
+              };
+            }
+            return roster.find(p => p.number === editingPlayerInfo.number) || {
+              number: editingPlayerInfo.number,
+              name: '',
+              position: 'PG',
+              isOpponent: false
+            };
+          })()}
+          onSavePlayer={handleSavePlayerName}
+        />
+      )}
     </div>
   );
 }

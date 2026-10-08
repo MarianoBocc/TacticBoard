@@ -5,6 +5,7 @@ export default function Court({
   theme = 'parquet', // 'parquet' | 'slate'
   courtPlayers = [],
   opponentPlayers = [],
+  roster = [],
   actions = [],
   activeStep = -1,
   isPlaying = false,
@@ -24,7 +25,8 @@ export default function Court({
   selectedScratchItem = null,
   onCourtClick,
   isEraserActive = false,
-  onDeleteAction
+  onDeleteAction,
+  onEditPlayer
 }) {
   const containerRef = useRef(null);
   const [draggingPlayer, setDraggingPlayer] = useState(null);
@@ -42,8 +44,8 @@ export default function Court({
   const isPointerDownRef = useRef(false);
   const pointerStartPosRef = useRef({ x: 0, y: 0, time: 0 });
   
-  // Custom double tap tracker for tablets
-  const lastTapRef = useRef({ time: 0, playerNumber: null });
+  // Custom double tap tracker for tablets (supports both team players and opponents)
+  const lastTapRef = useRef({ time: 0, playerNumber: null, isOpponent: false });
 
   // ViewBox dimensions:
   // Half-court: 1000 x 900
@@ -72,35 +74,27 @@ export default function Court({
     };
   }, []);
 
-  // Handle double click / double tap for passing
-  const handlePlayerInteraction = (playerNumber, e) => {
-    // If we're in ball assign mode, just assign ball
+  // Handle double click / double tap: opens rename modal for that player number
+  const handlePlayerInteraction = (playerNumber, isOpponent = false) => {
     if (isAssigningBall) {
       onAssignBall(playerNumber);
-      return;
+      return true;
     }
 
     const now = Date.now();
     const lastTap = lastTapRef.current;
 
-    // Check if double tap on the same player within 360ms
-    if (lastTap.playerNumber === playerNumber && (now - lastTap.time) < 360) {
-      if (designTool === 'setup') {
-        // In setup mode, double tap directly assigns the ball to this player!
-        onAssignBall?.(playerNumber);
-        lastTapRef.current = { time: 0, playerNumber: null };
-        return;
-      }
-      // Find current ball carrier
-      const ballCarrier = courtPlayers.find(p => p.hasBall);
-      if (ballCarrier && ballCarrier.number !== playerNumber) {
-        onPlayerPass(ballCarrier.number, playerNumber);
-      }
-      lastTapRef.current = { time: 0, playerNumber: null };
-      return;
+    // Check if double tap on the same player within 380ms
+    if (lastTap.playerNumber === playerNumber && lastTap.isOpponent === isOpponent && (now - lastTap.time) < 380) {
+      setDraggingPlayer(null);
+      setDraggingOpponent(null);
+      onEditPlayer?.(playerNumber, isOpponent);
+      lastTapRef.current = { time: 0, playerNumber: null, isOpponent: false };
+      return true;
     }
 
-    lastTapRef.current = { time: now, playerNumber };
+    lastTapRef.current = { time: now, playerNumber, isOpponent };
+    return false;
   };
 
   // Helper to calculate distance from a point to a line segment (for eraser tool)
@@ -148,6 +142,10 @@ export default function Court({
   const handleOpponentPointerDown = (opp, e) => {
     if (isPlaying || isEraserActive) return;
     e.stopPropagation();
+
+    const isDoubleTap = handlePlayerInteraction(opp.number, true);
+    if (isDoubleTap) return;
+
     e.target.setPointerCapture?.(e.pointerId);
     setDraggingOpponent(opp.id);
     setOpponentDragOrigin({ x: opp.x, y: opp.y });
@@ -159,7 +157,8 @@ export default function Court({
     if (isPlaying || isEraserActive) return;
     
     // Check for double click interaction
-    handlePlayerInteraction(player.number, e);
+    const isDoubleTap = handlePlayerInteraction(player.number, false);
+    if (isDoubleTap) return;
 
     if (isAssigningBall) return;
 
@@ -941,6 +940,8 @@ export default function Court({
             const currentCoords = isBeingDragged && livePos ? livePos : { x: player.x, y: player.y };
             const svgPos = pctToSvg(currentCoords.x, currentCoords.y);
             const isCarrier = player.hasBall;
+            const rosterPlayer = roster.find(r => r.number === player.number);
+            const playerName = player.name || rosterPlayer?.name;
 
             return (
               <g
@@ -956,10 +957,8 @@ export default function Court({
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
-                  const carrier = courtPlayers.find(p => p.hasBall);
-                  if (carrier && carrier.number !== player.number) {
-                    onPlayerPass(carrier.number, player.number);
-                  }
+                  setDraggingPlayer(null);
+                  onEditPlayer?.(player.number, false);
                 }}
                 style={{ cursor: isAssigningBall ? 'pointer' : 'grab' }}
               >
@@ -1008,6 +1007,34 @@ export default function Court({
                   {player.number}
                 </text>
 
+                {/* Player Name Badge under token */}
+                {playerName && (
+                  <g transform="translate(0, 54)" className="player-name-badge">
+                    <rect
+                      x={-Math.min(55, Math.max(26, playerName.length * 4.6 + 9))}
+                      y="-9"
+                      width={Math.min(110, Math.max(52, playerName.length * 9.2 + 18))}
+                      height="18"
+                      rx="6"
+                      fill="rgba(10, 15, 29, 0.94)"
+                      stroke={isCarrier ? "#ff7700" : "rgba(74, 222, 128, 0.65)"}
+                      strokeWidth="1.2"
+                      filter="drop-shadow(0 2px 4px rgba(0,0,0,0.85))"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="4"
+                      fill="#ffffff"
+                      fontSize="12"
+                      fontWeight="700"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                    >
+                      {playerName.length > 11 ? `${playerName.slice(0, 10)}…` : playerName}
+                    </text>
+                  </g>
+                )}
+
                 {/* Mini Ball Indicator icon attached to token */}
                 {isCarrier && (
                   <g transform="translate(26, -28)" className="mini-ball-indicator">
@@ -1036,6 +1063,7 @@ export default function Court({
             const currentCoords = isBeingDragged && livePos ? livePos : { x: opp.x, y: opp.y };
             const svgPos = pctToSvg(currentCoords.x, currentCoords.y);
             const oppHasBall = opp.hasBall;
+            const oppName = opp.name;
 
             return (
               <g
@@ -1043,6 +1071,11 @@ export default function Court({
                 className={`player-svg-node opponent-node ${oppHasBall ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''}`}
                 transform={`translate(${svgPos.x}, ${svgPos.y})`}
                 onPointerDown={(e) => handleOpponentPointerDown(opp, e)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setDraggingOpponent(null);
+                  onEditPlayer?.(opp.number, true);
+                }}
                 style={{ cursor: isEraserActive ? 'crosshair' : 'grab' }}
               >
                 {/* Touch hit area */}
@@ -1089,6 +1122,34 @@ export default function Court({
                 >
                   {opp.number}
                 </text>
+
+                {/* Opponent Name Badge */}
+                {oppName && (
+                  <g transform="translate(0, 54)" className="player-name-badge">
+                    <rect
+                      x={-Math.min(55, Math.max(26, oppName.length * 4.6 + 9))}
+                      y="-9"
+                      width={Math.min(110, Math.max(52, oppName.length * 9.2 + 18))}
+                      height="18"
+                      rx="6"
+                      fill="rgba(10, 15, 29, 0.94)"
+                      stroke="rgba(248, 113, 113, 0.65)"
+                      strokeWidth="1.2"
+                      filter="drop-shadow(0 2px 4px rgba(0,0,0,0.85))"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="4"
+                      fill="#ffffff"
+                      fontSize="12"
+                      fontWeight="700"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                    >
+                      {oppName.length > 11 ? `${oppName.slice(0, 10)}…` : oppName}
+                    </text>
+                  </g>
+                )}
 
                 {/* Mini Ball Indicator icon if opponent has ball */}
                 {oppHasBall && (
