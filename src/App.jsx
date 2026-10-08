@@ -27,7 +27,14 @@ export default function App() {
       const stored = localStorage.getItem(ROSTER_STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingNumbers = new Set(parsed.map(p => p.number));
+          const missingPlayers = INITIAL_ROSTER.filter(p => !existingNumbers.has(p.number));
+          if (missingPlayers.length > 0) {
+            return [...parsed, ...missingPlayers];
+          }
+          return parsed;
+        }
       }
     } catch (err) {
       console.error("Error reading custom roster from localStorage:", err);

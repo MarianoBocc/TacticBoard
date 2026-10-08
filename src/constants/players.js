@@ -15,6 +15,7 @@ export const INITIAL_ROSTER = [
   { id: 16, number: 16, name: "Suplente 8", position: "F", active: false },
   { id: 17, number: 17, name: "Suplente 9", position: "PF", active: false },
   { id: 18, number: 18, name: "Suplente 10", position: "C", active: false },
+  { id: 19, number: 19, name: "Suplente 11", position: "PF", active: false },
 ];
 
 // Formaciones iniciales recomendadas (en % de ancho y alto de cancha)

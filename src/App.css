@@ -2044,7 +2044,7 @@
   gap: 0.4rem;
 }
 
-/* 2-column grid in dock-right: all 15 numbers fit cleanly without scrolling or clipping */
+/* 2-column grid in dock-right: numbers fit cleanly without scrolling or clipping */
 .dock-right .scratch-numbers-list {
   display: grid;
   grid-template-columns: repeat(2, 36px);
@@ -2053,7 +2053,7 @@
   width: 100%;
 }
 
-.dock-right .scratch-numbers-list .player-chip:last-child {
+.dock-right .scratch-numbers-list .player-chip:last-child:nth-child(odd) {
   grid-column: span 2;
   margin: 0 auto;
 }
