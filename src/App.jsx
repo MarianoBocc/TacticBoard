@@ -11,10 +11,12 @@ import TopBar from './components/TopBar';
 import Court from './components/Court';
 import BenchPanel from './components/BenchPanel';
 import ControlsBar from './components/ControlsBar';
+import MobileActionsDrawer from './components/MobileActionsDrawer';
 import PlaybookModal from './components/PlaybookModal';
 import SaveFormationModal from './components/SaveFormationModal';
 import ScratchDock from './components/ScratchDock';
 import EditPlayerModal from './components/EditPlayerModal';
+import { Sliders, Users, Play, Pause, SkipBack, SkipForward, RotateCcw } from 'lucide-react';
 
 const STORAGE_KEY = 'tacticapp_saved_plays_v1';
 const FORMATIONS_STORAGE_KEY = 'tacticapp_custom_formations_v1';
@@ -147,8 +149,89 @@ export default function App() {
   const [modalType, setModalType] = useState('load'); // 'save' | 'load'
   const [isSaveFormationModalOpen, setIsSaveFormationModalOpen] = useState(false);
 
-  // Mobile drawer state for Bench/Formations
+  // Mobile drawer states (Left: Actions, Right: Players/Bench)
   const [isMobileBenchOpen, setIsMobileBenchOpen] = useState(false);
+  const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
+
+  const handleToggleMobileActions = () => {
+    setIsMobileBenchOpen(false);
+    setIsMobileActionsOpen(prev => !prev);
+  };
+
+  const handleToggleMobileBench = () => {
+    setIsMobileActionsOpen(false);
+    setIsMobileBenchOpen(prev => !prev);
+  };
+
+  // Global horizontal swipe gesture detection for mobile side drawers:
+  // - Swipe Left opens Right Drawer (Plantel / Players) or closes Left Drawer
+  // - Swipe Right opens Left Drawer (Acciones / Controls) or closes Right Drawer
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    let shouldIgnore = false;
+
+    const handleTouchStart = (e) => {
+      if (e.touches.length !== 1) {
+        shouldIgnore = true;
+        return;
+      }
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      touchStartTime = Date.now();
+
+      // Check if touch target is a draggable player/ball or inside a modal/button
+      const target = e.target;
+      const isInteractive = target.closest(
+        '.player-node, .opponent-node, .free-ball-node, button, input, select, textarea, .modal-backdrop, .modal-window, .step-circle-btn, .scratch-item-chip, .formation-pill, .bench-player-card, .mobile-actions-content, .bench-roster-scroll'
+      );
+      shouldIgnore = !!isInteractive;
+    };
+
+    const handleTouchEnd = (e) => {
+      if (shouldIgnore || e.changedTouches.length === 0) return;
+
+      const t = e.changedTouches[0];
+      const deltaX = t.clientX - touchStartX;
+      const deltaY = t.clientY - touchStartY;
+      const distX = Math.abs(deltaX);
+      const distY = Math.abs(deltaY);
+      const elapsed = Date.now() - touchStartTime;
+
+      // Reliable horizontal swipe threshold
+      if (distX > 45 && distX > distY * 1.25 && elapsed < 800) {
+        if (deltaX < 0) {
+          // Swipe Left (dedo hacia la izquierda) -> abre Plantel (derecha) o cierra Acciones
+          setIsMobileActionsOpen(prevActions => {
+            if (prevActions) {
+              return false;
+            }
+            setIsMobileBenchOpen(true);
+            return false;
+          });
+        } else {
+          // Swipe Right (dedo hacia la derecha) -> abre Acciones (izquierda) o cierra Plantel
+          setIsMobileBenchOpen(prevBench => {
+            if (prevBench) {
+              return false;
+            }
+            setIsMobileActionsOpen(true);
+            return false;
+          });
+        }
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, []);
 
   // Saved plays in memory (persisted in localStorage)
   const [savedPlays, setSavedPlays] = useState(() => {
@@ -767,9 +850,12 @@ export default function App() {
         onToggleTheme={() => setTheme(prev => prev === 'parquet' ? 'slate' : 'parquet')}
         currentPlayName={currentPlayName}
         isRecording={mode === 'design' || mode === 'scratch'}
-        onToggleMobileBench={() => setIsMobileBenchOpen(prev => !prev)}
+        onToggleMobileBench={handleToggleMobileBench}
         isMobileBenchOpen={isMobileBenchOpen}
         courtPlayersCount={courtPlayers.length}
+        onToggleMobileActions={handleToggleMobileActions}
+        isMobileActionsOpen={isMobileActionsOpen}
+        actionsCount={actions.length}
       />
 
       {/* Main Tactical Arena */}
@@ -849,7 +935,7 @@ export default function App() {
         />
       </div>
 
-      {/* Bottom Controls Bar for Tablet Thumbs */}
+      {/* Bottom Controls Bar for Tablet Thumbs / Desktop */}
       <ControlsBar
         mode={mode}
         onModeChange={(newMode) => {
@@ -898,6 +984,122 @@ export default function App() {
         onClearDrawings={handleClearDrawings}
         onReturnToBench={handleReturnToBench}
       />
+
+      {/* Mobile Drawer from Left for Actions & Play Reproduction */}
+      <MobileActionsDrawer
+        isOpen={isMobileActionsOpen}
+        onClose={() => setIsMobileActionsOpen(false)}
+        mode={mode}
+        onModeChange={(newMode) => {
+          setMode(newMode);
+          if (newMode === 'animation') {
+            setActiveStep(-1);
+          } else {
+            const finalPlayers = computePlayersAtStep(initialPlayers, actions, actions.length - 1);
+            setCourtPlayers(finalPlayers);
+          }
+        }}
+        designTool={designTool}
+        onDesignToolChange={handleDesignToolChange}
+        actions={actions}
+        activeStep={activeStep}
+        isPlaying={isPlaying}
+        playbackSpeed={playbackSpeed}
+        isAssigningBall={isAssigningBall}
+        onToggleAssignBall={() => setIsAssigningBall(prev => !prev)}
+        onPlay={() => {
+          if (activeStep >= actions.length - 1) {
+            setActiveStep(-1);
+          }
+          setIsPlaying(true);
+        }}
+        onPause={() => setIsPlaying(false)}
+        onStepBack={handleStepBack}
+        onStepForward={handleStepForward}
+        onResetToStart={handleResetToStart}
+        onGoToEnd={handleGoToEnd}
+        onChangeSpeed={(speed) => setPlaybackSpeed(speed)}
+        onUndoLastAction={handleUndoLastAction}
+        onClearActions={handleClearActions}
+        onOpenSaveModal={() => {
+          setModalType('save');
+          setIsModalOpen(true);
+        }}
+        onOpenPlaybookModal={() => {
+          setModalType('load');
+          setIsModalOpen(true);
+        }}
+        onNewPlay={handleNewPlay}
+        isEraserActive={isEraserActive}
+        onToggleEraser={() => setIsEraserActive(prev => !prev)}
+        onClearDrawings={handleClearDrawings}
+        onReturnToBench={handleReturnToBench}
+        currentPlayName={currentPlayName}
+      />
+
+      {/* Floating edge pills for mobile quick access hints */}
+      <div className="mobile-edge-tabs mobile-only">
+        <button 
+          className="mobile-edge-pill left-pill"
+          onClick={handleToggleMobileActions}
+          title="Abrir Acciones (o desliza desde la izquierda)"
+        >
+          <Sliders size={13} />
+          <span>Acciones</span>
+        </button>
+
+        <button 
+          className="mobile-edge-pill right-pill"
+          onClick={handleToggleMobileBench}
+          title="Abrir Plantel (o desliza desde la derecha)"
+        >
+          <span>Plantel</span>
+          <Users size={13} />
+        </button>
+      </div>
+
+      {/* Floating mini playback bar when in animation mode on mobile */}
+      {mode === 'animation' && !isMobileActionsOpen && !isMobileBenchOpen && (
+        <div className="mobile-floating-stepper mobile-only">
+          <button 
+            className="stepper-mini-btn"
+            onClick={handleResetToStart}
+            title="Reiniciar a formación inicial"
+          >
+            <RotateCcw size={13} />
+          </button>
+          <button 
+            className="stepper-mini-btn"
+            onClick={handleStepBack}
+            disabled={activeStep <= 0}
+            title="Paso Anterior"
+          >
+            <SkipBack size={14} />
+          </button>
+          <button 
+            className={`stepper-mini-btn play-btn ${isPlaying ? 'playing' : ''}`}
+            onClick={isPlaying ? () => setIsPlaying(false) : () => {
+              if (activeStep >= actions.length - 1) setActiveStep(-1);
+              setIsPlaying(true);
+            }}
+            disabled={actions.length === 0}
+            title={isPlaying ? "Pausar" : "Reproducir"}
+          >
+            {isPlaying ? <Pause size={16} /> : <Play size={16} style={{ marginLeft: 2 }} />}
+          </button>
+          <button 
+            className="stepper-mini-btn"
+            onClick={handleStepForward}
+            disabled={activeStep >= actions.length - 1}
+            title="Paso Siguiente"
+          >
+            <SkipForward size={14} />
+          </button>
+          <div className="mini-step-text">
+            <span>Paso {actions.length === 0 ? 0 : activeStep === -1 ? actions.length : activeStep + 1}/{actions.length}</span>
+          </div>
+        </div>
+      )}
 
       {/* Playbook Save/Load Modal */}
       <PlaybookModal

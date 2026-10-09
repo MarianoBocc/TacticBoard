@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   UserPlus, 
   UserMinus, 
@@ -35,6 +35,22 @@ export default function BenchPanel({
   const onCourtCount = courtPlayers.length;
   const isCourtFull = onCourtCount >= 5;
   const [isManagingFormations, setIsManagingFormations] = useState(false);
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+
+  const handleTouchStart = (e) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e) => {
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+    // Swipe right to close side drawer
+    if (deltaX > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      onCloseMobile?.();
+    }
+  };
 
   return (
     <>
@@ -47,26 +63,27 @@ export default function BenchPanel({
         />
       )}
 
-      <aside className={`bench-sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
-        {/* Bottom Sheet Handle for touch drag */}
-        <div className="bottom-sheet-handle mobile-only" onClick={onCloseMobile}>
-          <span className="handle-bar" />
-        </div>
-
+      <aside 
+        className={`bench-sidebar ${isMobileOpen ? 'mobile-open' : ''}`}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        aria-label="Panel de Jugadores y Disposiciones"
+      >
         {/* Mobile-only Drawer Header */}
         <div className="mobile-drawer-header">
-          <div className="drawer-title-group">
-            <span className="drawer-title">Plantel & Disposiciones</span>
-            <span className="drawer-badge">{onCourtCount} de 5 en cancha</span>
-          </div>
           <button 
             className="drawer-close-btn" 
             onClick={onCloseMobile}
             title="Cerrar y ver cancha completa"
           >
+            <span>Cancha</span>
             <Eye size={14} />
-            <span>Ver Cancha</span>
           </button>
+
+          <div className="drawer-title-group">
+            <span className="drawer-title">Plantel</span>
+            <span className="drawer-badge">{onCourtCount}/5 en cancha</span>
+          </div>
         </div>
 
         {/* ========================================================

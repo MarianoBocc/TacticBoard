@@ -3,7 +3,8 @@ import {
   Maximize2, 
   Layers, 
   Palette, 
-  Users
+  Users,
+  Sliders
 } from 'lucide-react';
 
 export default function TopBar({
@@ -15,7 +16,10 @@ export default function TopBar({
   isRecording,
   onToggleMobileBench,
   isMobileBenchOpen,
-  courtPlayersCount = 0
+  courtPlayersCount = 0,
+  onToggleMobileActions,
+  isMobileActionsOpen,
+  actionsCount = 0
 }) {
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -51,13 +55,24 @@ export default function TopBar({
 
       {/* Actions */}
       <div className="topbar-actions">
-        {/* Mobile Toggle Button for Bench Drawer */}
+        {/* Mobile Toggle Button for Actions Drawer (Left Drawer) */}
+        <button
+          className={`topbar-btn mobile-actions-btn ${isMobileActionsOpen ? 'active' : ''}`}
+          onClick={onToggleMobileActions}
+          title="Abrir Acciones y Jugadas (O desliza desde la izquierda)"
+        >
+          <Sliders size={15} />
+          <span className="actions-btn-text">Acciones</span>
+          {actionsCount > 0 && <span className="mobile-actions-pill">{actionsCount}</span>}
+        </button>
+
+        {/* Mobile Toggle Button for Bench Drawer (Right Drawer) */}
         <button
           className={`topbar-btn mobile-bench-btn ${isMobileBenchOpen ? 'active' : ''}`}
           onClick={onToggleMobileBench}
-          title="Abrir Plantel de Jugadores y Disposiciones"
+          title="Abrir Plantel de Jugadores y Disposiciones (O desliza desde la derecha)"
         >
-          <Users size={16} />
+          <Users size={15} />
           <span className="bench-btn-text">Plantel</span>
           <span className="mobile-bench-pill">{courtPlayersCount}/5</span>
         </button>
