@@ -433,8 +433,9 @@
 }
 
 .formation-action-icon-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.25rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid var(--border-subtle);
@@ -443,6 +444,30 @@
   border-radius: 6px;
   font-size: 0.72rem;
   font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.formation-action-icon-btn.save-formation-btn {
+  background: linear-gradient(135deg, #ff7700 0%, #ea580c 100%);
+  color: #fff;
+  border: 1px solid #ffa94d;
+  box-shadow: 0 2px 8px var(--orange-ball-glow);
+  padding: 5px 6px;
+}
+
+.formation-action-icon-btn.save-formation-btn:hover:not(:disabled) {
+  background: #ff922b;
+  color: #fff;
+  transform: scale(1.05);
+}
+
+.formation-action-icon-btn.save-formation-btn:disabled {
+  opacity: 0.35;
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .formation-action-icon-btn:hover:not(:disabled) {
@@ -1574,6 +1599,11 @@
     overflow: hidden;
   }
 
+  .court-container-area.scratch-mode-active.layout-dock-right {
+    padding: 4px 6px 4px 4px;
+    gap: 0.4rem;
+  }
+
   .court-wrapper {
     width: 100%;
     height: 100%;
@@ -2344,57 +2374,9 @@
     display: none !important;
   }
 
-  /* FLOATING MOBILE EDGE TABS */
+  /* FLOATING MOBILE EDGE TABS - ELIMINATED (ACCIONES Y PLANTEL INFERIOR) */
   .mobile-edge-tabs {
-    position: fixed;
-    bottom: 12px;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: space-between;
-    padding: 0 12px;
-    pointer-events: none;
-    z-index: 95;
-  }
-
-  .mobile-edge-pill {
-    pointer-events: auto;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 6px 12px;
-    border-radius: 999px;
-    font-size: 0.72rem;
-    font-weight: 700;
-    backdrop-filter: blur(12px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .mobile-edge-pill.left-pill {
-    background: rgba(15, 23, 42, 0.9);
-    color: #60a5fa;
-    border-color: rgba(96, 165, 250, 0.35);
-  }
-
-  .mobile-edge-pill.left-pill:active {
-    transform: scale(0.95);
-    background: #1d72fe;
-    color: #fff;
-  }
-
-  .mobile-edge-pill.right-pill {
-    background: rgba(15, 23, 42, 0.9);
-    color: #ff922b;
-    border-color: rgba(255, 146, 43, 0.35);
-  }
-
-  .mobile-edge-pill.right-pill:active {
-    transform: scale(0.95);
-    background: #ff7700;
-    color: #fff;
+    display: none !important;
   }
 
   /* FLOATING MINI STEPPER CONTROLLER ON MOBILE COURT */
@@ -2469,21 +2451,23 @@
 
 .court-container-area.scratch-mode-active.layout-dock-right {
   flex-direction: row;
-  gap: 0.75rem;
+  gap: 0.65rem;
+  padding-right: 12px;
+  box-sizing: border-box;
 }
 
 /* Base Scratch Dock Container */
 .scratch-dock {
-  background: rgba(13, 20, 36, 0.95);
-  backdrop-filter: blur(14px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 14px;
+  background: rgba(13, 20, 36, 0.96);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
   padding: 0.45rem 0.65rem;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   z-index: 12;
-  gap: 0.55rem;
+  gap: 0.6rem;
   box-sizing: border-box;
 }
 
@@ -2495,79 +2479,210 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
-  padding: 0.5rem 0.75rem;
+  padding: 0.55rem 0.85rem;
+  gap: 0.8rem;
 }
 
-/* Full court: Dock at Right - Clean 2-column grid, no trapped inner scroll */
+/* Full court: Dock at Right - Ergonomic width with safe margin from right edge */
 .scratch-dock.dock-right {
   height: auto;
-  max-height: 86vh;
+  max-height: 88vh;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
-  width: auto;
-  min-width: 98px;
-  padding: 0.6rem 0.5rem;
-  gap: 0.45rem;
+  width: 126px;
+  min-width: 126px;
+  max-width: 126px;
+  padding: 0.65rem 0.5rem;
+  gap: 0.55rem;
+  margin-right: 8px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-/* Quick Tools in Dock (Borrador, Trazos, Banca) */
+/* Quick Tools in Dock (Trazar/Ubicar, Borrador, Eliminar, Banca) */
 .scratch-actions-group {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.45rem;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .dock-right .scratch-actions-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
   width: 100%;
+  position: sticky;
+  top: 0;
+  background: rgba(13, 20, 36, 0.98);
+  z-index: 10;
+  padding-bottom: 0.25rem;
+  box-sizing: border-box;
+}
+
+/* Mode Switcher: Trazar vs Ubicar */
+.scratch-mode-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-sizing: border-box;
+}
+
+.dock-right .scratch-mode-toggle-group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  box-sizing: border-box;
+  padding: 3px;
+  gap: 4px;
+}
+
+.scratch-mode-toggle-group .mode-switch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 40px;
+  padding: 4px 6px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  min-width: 0;
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+
+.dock-right .scratch-mode-toggle-group .mode-switch-btn {
+  flex-direction: column;
+  gap: 3px;
+  height: 48px;
+  font-size: 0.72rem;
+  padding: 4px 2px;
+  width: 100%;
+}
+
+.dock-right .scratch-mode-toggle-group .mode-switch-btn .scratch-btn-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  letter-spacing: -0.01em;
+}
+
+.scratch-mode-toggle-group .mode-switch-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* Active DRAW Mode - vibrant blue */
+.scratch-mode-toggle-group .mode-switch-btn.active-draw-mode,
+.scratch-mode-toggle-group .mode-switch-btn.active-draw-mode:hover,
+.scratch-mode-toggle-group .mode-switch-btn.active-draw-mode:focus,
+.scratch-mode-toggle-group .mode-switch-btn.active-draw-mode:active {
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%) !important;
+  color: #ffffff !important;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 14px rgba(56, 189, 248, 0.6) !important;
+}
+
+/* Active SETUP Mode (Ubicar) - vibrant green */
+.scratch-mode-toggle-group .mode-switch-btn.active-setup-mode,
+.scratch-mode-toggle-group .mode-switch-btn.active-setup-mode:hover,
+.scratch-mode-toggle-group .mode-switch-btn.active-setup-mode:focus,
+.scratch-mode-toggle-group .mode-switch-btn.active-setup-mode:active {
+  background: linear-gradient(135deg, #15803d 0%, #166534 100%) !important;
+  color: #ffffff !important;
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.55) !important;
+}
+
+/* Action Buttons (Borrador, Eliminar, Banca) - Large touch targets */
+.scratch-tool-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1.5px solid rgba(255, 255, 255, 0.16);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 11px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  user-select: none;
 }
 
 .dock-right .scratch-tool-btn {
   width: 100%;
-  justify-content: center;
-  padding: 5px 6px;
-  font-size: 0.72rem;
-}
-
-.scratch-tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text-main);
-  padding: 5px 9px;
-  border-radius: 8px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  flex-shrink: 0;
+  height: 40px;
+  padding: 6px 8px;
+  font-size: 0.78rem;
+  gap: 0.4rem;
 }
 
 .scratch-tool-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
   transform: translateY(-1px);
 }
 
+.scratch-tool-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
 .scratch-tool-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: not-allowed;
 }
 
+/* Borrador Activo */
 .scratch-tool-btn.eraser-btn.active-eraser {
-  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
-  color: #ffffff;
-  border-color: #f87171;
-  box-shadow: 0 0 14px rgba(239, 68, 68, 0.6);
+  background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important;
+  color: #ffffff !important;
+  border-color: #f87171 !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.75) !important;
   animation: pulseEraser 1.8s infinite;
+}
+
+/* Eliminar Trazos */
+.scratch-tool-btn.clear-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.scratch-action-count {
+  background: rgba(239, 68, 68, 0.85);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 900;
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 2px;
+}
+
+/* Banca */
+.scratch-tool-btn.bench-btn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #93c5fd;
 }
 
 @keyframes pulseEraser {
@@ -2582,17 +2697,47 @@
   box-shadow: 0 0 12px rgba(239, 68, 68, 0.6) !important;
 }
 
+/* Dividers */
 .scratch-divider {
   width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.14);
+  height: 28px;
+  background: rgba(255, 255, 255, 0.18);
   flex-shrink: 0;
 }
 
 .dock-right .scratch-divider {
-  width: 80%;
+  width: 90%;
   height: 1px;
-  margin: 0.2rem 0;
+  margin: 0.15rem auto;
+}
+
+.scratch-sub-divider {
+  width: 1px;
+  height: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+.dock-right .scratch-sub-divider {
+  width: 70%;
+  height: 1px;
+  margin: 0.15rem auto;
+}
+
+/* Chips Area (Llevada más abajo) */
+.scratch-chips-area {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.dock-right .scratch-chips-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  gap: 0.55rem;
 }
 
 /* Ball Section in Dock */
@@ -2617,24 +2762,24 @@
 }
 
 .scratch-item-chip.ball-chip {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   background: rgba(255, 119, 0, 0.15);
-  border: 1.5px solid #ff7700;
-  font-size: 1.2rem;
+  border: 2px solid #ff7700;
+  font-size: 1.35rem;
 }
 
 .scratch-item-chip.ball-chip:hover {
-  background: rgba(255, 119, 0, 0.3);
+  background: rgba(255, 119, 0, 0.35);
   transform: scale(1.1);
-  box-shadow: 0 0 14px rgba(255, 119, 0, 0.5);
+  box-shadow: 0 0 16px rgba(255, 119, 0, 0.6);
 }
 
 .scratch-item-chip.ball-chip.selected {
   background: #ff7700;
   border-color: #ffffff;
   transform: scale(1.15);
-  box-shadow: 0 0 18px rgba(255, 119, 0, 0.85);
+  box-shadow: 0 0 20px rgba(255, 119, 0, 0.9);
 }
 
 /* Numbers scroll and list */
@@ -2653,21 +2798,21 @@
 
 .dock-right .scratch-numbers-scroll {
   width: 100%;
-  overflow: visible; /* NO INNER TRAPPED SCROLLING - PREVENTS CUTTING OFF NUMBERS */
+  overflow: visible;
   flex: none;
 }
 
 .scratch-numbers-list {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
 }
 
-/* 2-column grid in dock-right: numbers fit cleanly without scrolling or clipping */
+/* 2-column grid in dock-right */
 .dock-right .scratch-numbers-list {
   display: grid;
-  grid-template-columns: repeat(2, 36px);
-  gap: 6px;
+  grid-template-columns: repeat(2, 40px);
+  gap: 7px;
   justify-content: center;
   width: 100%;
 }
@@ -2678,13 +2823,13 @@
 }
 
 .scratch-item-chip.player-chip {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   background: #141f32;
-  border: 1.5px solid rgba(255, 255, 255, 0.18);
-  color: #e2e8f0;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  color: #f1f5f9;
   font-weight: 900;
-  font-size: 0.92rem;
+  font-size: 0.96rem;
   font-family: var(--font-display);
 }
 
@@ -2725,14 +2870,38 @@
 .scratch-opponents-group {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.45rem;
   flex-shrink: 0;
 }
 
 .dock-right .scratch-opponents-group {
   flex-direction: column;
   width: 100%;
-  gap: 0.35rem;
+  gap: 0.45rem;
+}
+
+.dock-right .scratch-opponents-list {
+  display: grid;
+  grid-template-columns: repeat(2, 40px);
+  gap: 7px;
+  justify-content: center;
+  width: 100%;
+}
+
+.dock-right .scratch-opponents-list .opponent-chip:last-child {
+  grid-column: span 2;
+  margin: 0 auto;
+}
+
+.scratch-item-chip.opponent-chip {
+  width: 40px;
+  height: 40px;
+  background: #7f1d1d;
+  border: 2px solid #ef4444;
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 0.96rem;
+  font-family: var(--font-display);
 }
 
 .scratch-group-header {
@@ -2750,7 +2919,7 @@
 }
 
 .opponents-group-title {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -2990,6 +3159,36 @@
   color: #4ade80;
   border-color: rgba(74, 222, 128, 0.4);
   background: rgba(74, 222, 128, 0.15);
+}
+
+/* ========================================================
+   SCREEN / CORTINA TACTICAL ACTION STYLES
+   ======================================================== */
+.screen-vector-group {
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.screen-vector-group:hover line:nth-of-type(6) {
+  stroke-width: 8.5;
+  filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.9));
+}
+
+/* Marco circular al jugador que cortina */
+.screener-circular-frame {
+  stroke: #eab308;
+  filter: drop-shadow(0 0 10px rgba(234, 179, 8, 0.85));
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.screener-target-solid-frame {
+  stroke: #ef4444;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.75));
+}
+
+.screen-hover-indicator {
+  pointer-events: none;
+  animation: fadeIn 0.15s ease-out;
 }
 
 

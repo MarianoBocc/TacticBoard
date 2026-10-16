@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eraser, Trash2, Users, Shield } from 'lucide-react';
+import { Eraser, Trash2, Users, Shield, Pencil, MapPin } from 'lucide-react';
 
 export default function ScratchDock({
   courtType = 'half', // 'half' | 'full'
@@ -13,7 +13,10 @@ export default function ScratchDock({
   isEraserActive = false,
   onToggleEraser,
   onClearDrawings,
-  onReturnToBench
+  onReturnToBench,
+  designTool = 'setup', // 'setup' (Ubicar) | 'draw' (Trazar)
+  onDesignToolChange,
+  actionsCount = 0
 }) {
   const onCourtNumbers = new Set(courtPlayers.map(p => p.number));
   const onCourtOpponents = new Set(opponentPlayers.map(o => o.number));
@@ -27,152 +30,194 @@ export default function ScratchDock({
       className={`scratch-dock ${courtType === 'full' ? 'dock-right' : 'dock-bottom'}`}
       aria-label="Paleta de herramientas Scratch"
     >
-      {/* Quick Action Tools: Borrador, Limpiar Trazos, A la Banca */}
+      {/* ========================================================
+          ACCIONES TÁCTICAS PRINCIPALES (MÁS GRANDES Y ACCESIBLES)
+          ======================================================== */}
       <div className="scratch-actions-group">
+        {/* Selector de Modo: Trazar vs Ubicar */}
+        <div className="scratch-mode-toggle-group">
+          <button
+            type="button"
+            className={`mode-switch-btn ${designTool === 'draw' ? 'active-draw-mode' : ''}`}
+            onClick={() => onDesignToolChange?.('draw')}
+            title="Modo Trazar: al arrastrar jugadores se dibujan flechas de corte, drible o tiro"
+          >
+            <Pencil size={18} />
+            <span className="scratch-btn-label">Trazar</span>
+          </button>
+
+          <button
+            type="button"
+            className={`mode-switch-btn ${designTool === 'setup' ? 'active-setup-mode' : ''}`}
+            onClick={() => onDesignToolChange?.('setup')}
+            title="Modo Ubicar: mueve y coloca a los jugadores libremente sin dibujar flechas"
+          >
+            <MapPin size={18} />
+            <span className="scratch-btn-label">Ubicar</span>
+          </button>
+        </div>
+
+        {/* Botón Borrador táctil */}
         <button
+          type="button"
           className={`scratch-tool-btn eraser-btn ${isEraserActive ? 'active-eraser' : ''}`}
           onClick={onToggleEraser}
-          title={isEraserActive ? "Desactivar borrador" : "Borrador: pasa el dedo sobre un vector para borrarlo"}
+          title={isEraserActive ? "Desactivar borrador" : "Borrador táctil: pasa el dedo sobre un trazo para eliminarlo"}
         >
-          <Eraser size={16} />
-          <span className="scratch-btn-label">Borrador</span>
+          <Eraser size={18} />
+          <span className="scratch-btn-label">{isEraserActive ? 'Borrando' : 'Borrador'}</span>
         </button>
 
+        {/* Botón Eliminar / Limpiar trazos */}
         <button
-          className="scratch-tool-btn"
+          type="button"
+          className="scratch-tool-btn clear-btn"
           onClick={onClearDrawings}
-          title="Borrar todos los trazos y vectores de la cancha"
+          title="Eliminar todos los trazos dibujados sin mover a los jugadores"
+          disabled={actionsCount === 0}
         >
-          <Trash2 size={15} />
-          <span className="scratch-btn-label">Trazos</span>
+          <Trash2 size={18} />
+          <span className="scratch-btn-label">Eliminar</span>
+          {actionsCount > 0 && <span className="scratch-action-count">{actionsCount}</span>}
         </button>
 
+        {/* Botón A la Banca */}
         <button
-          className="scratch-tool-btn"
+          type="button"
+          className="scratch-tool-btn bench-btn"
           onClick={onReturnToBench}
-          title="Regresar todo el equipo al banco y limpiar la cancha"
+          title="Regresar todo el equipo al banco y despejar la cancha"
           disabled={courtPlayers.length === 0 && opponentPlayers.length === 0 && freeBallPos === null}
         >
-          <Users size={15} />
+          <Users size={18} />
           <span className="scratch-btn-label">Banca</span>
         </button>
       </div>
 
       <div className="scratch-divider" />
 
-      {/* 5 RED OPPONENT DEFENDERS (#1 TO #5) */}
-      <div className="scratch-opponents-group">
-        <div className="scratch-group-header">
-          <span className="opponents-group-title">Rival</span>
-          {onDeployOpponents && (
-            <button
-              className="deploy-opponents-btn"
-              onClick={onDeployOpponents}
-              title={opponentPlayers.length === 5 ? "Reubicar 5 rivales en formación" : "Desplegar 5 rivales en la cancha"}
-            >
-              <Shield size={12} />
-              <span>{opponentPlayers.length === 5 ? '5✓' : '+5'}</span>
-            </button>
-          )}
-        </div>
-        <div className="scratch-opponents-list">
-          {opponentNumbers.map((num) => {
-            const isPlaced = onCourtOpponents.has(num);
-            const isSelected = selectedItem?.type === 'opponent' && selectedItem?.number === num;
-            const oppOnCourt = opponentPlayers.find(o => o.number === num);
-            const hasBall = oppOnCourt?.hasBall;
-
-            return (
+      {/* ========================================================
+          GRILLA DE NÚMEROS Y FICHAS (UBICADA MÁS ABAJO)
+          ======================================================== */}
+      <div className="scratch-chips-area">
+        {/* 5 RIVALES DEFENSIVOS ROJOS (#1 AL #5) */}
+        <div className="scratch-opponents-group">
+          <div className="scratch-group-header">
+            <span className="opponents-group-title">Rival</span>
+            {onDeployOpponents && (
               <button
-                key={`opp-${num}`}
-                className={`scratch-item-chip opponent-chip ${isSelected ? 'selected' : ''} ${
-                  isPlaced ? 'placed-court' : ''
-                } ${hasBall ? 'has-ball' : ''}`}
-                onClick={() => {
-                  if (isSelected) {
-                    onSelectItem(null);
-                  } else {
-                    onSelectItem({ type: 'opponent', number: num });
-                  }
-                }}
-                title={
-                  isSelected
-                    ? `Rival #${num} seleccionado: toca en la cancha para colocarlo`
-                    : isPlaced
-                    ? `Rival #${num} en cancha: toca para moverlo`
-                    : `Colocar Rival #${num} en la cancha`
-                }
+                type="button"
+                className="deploy-opponents-btn"
+                onClick={onDeployOpponents}
+                title={opponentPlayers.length === 5 ? "Reubicar 5 rivales en formación" : "Desplegar 5 rivales en la cancha"}
               >
-                <span className="chip-number">{num}</span>
-                {hasBall && <span className="chip-mini-ball">🏀</span>}
+                <Shield size={13} />
+                <span>{opponentPlayers.length === 5 ? '5✓' : '+5'}</span>
               </button>
-            );
-          })}
+            )}
+          </div>
+          <div className="scratch-opponents-list">
+            {opponentNumbers.map((num) => {
+              const isPlaced = onCourtOpponents.has(num);
+              const isSelected = selectedItem?.type === 'opponent' && selectedItem?.number === num;
+              const oppOnCourt = opponentPlayers.find(o => o.number === num);
+              const hasBall = oppOnCourt?.hasBall;
+
+              return (
+                <button
+                  type="button"
+                  key={`opp-${num}`}
+                  className={`scratch-item-chip opponent-chip ${isSelected ? 'selected' : ''} ${
+                    isPlaced ? 'placed-court' : ''
+                  } ${hasBall ? 'has-ball' : ''}`}
+                  onClick={() => {
+                    if (isSelected) {
+                      onSelectItem(null);
+                    } else {
+                      onSelectItem({ type: 'opponent', number: num });
+                    }
+                  }}
+                  title={
+                    isSelected
+                      ? `Rival #${num} seleccionado: toca en la cancha para colocarlo`
+                      : isPlaced
+                      ? `Rival #${num} en cancha: toca para moverlo`
+                      : `Colocar Rival #${num} en la cancha`
+                  }
+                >
+                  <span className="chip-number">{num}</span>
+                  {hasBall && <span className="chip-mini-ball">🏀</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="scratch-divider" />
+        <div className="scratch-sub-divider" />
 
-      {/* Ball Item Chip */}
-      <div className="scratch-ball-section">
-        <button
-          className={`scratch-item-chip ball-chip ${
-            selectedItem?.type === 'ball' ? 'selected' : ''
-          } ${isBallOnCourt ? 'placed-court' : ''}`}
-          onClick={() => {
-            if (selectedItem?.type === 'ball') {
-              onSelectItem(null);
-            } else {
-              onSelectItem({ type: 'ball' });
+        {/* BALÓN SUELTO (🏀) */}
+        <div className="scratch-ball-section">
+          <button
+            type="button"
+            className={`scratch-item-chip ball-chip ${
+              selectedItem?.type === 'ball' ? 'selected' : ''
+            } ${isBallOnCourt ? 'placed-court' : ''}`}
+            onClick={() => {
+              if (selectedItem?.type === 'ball') {
+                onSelectItem(null);
+              } else {
+                onSelectItem({ type: 'ball' });
+              }
+            }}
+            title={
+              selectedItem?.type === 'ball'
+                ? "Balón seleccionado: toca en la cancha o sobre un jugador para ubicarlo"
+                : "Seleccionar balón para colocarlo en la cancha o entregarlo a un jugador"
             }
-          }}
-          title={
-            selectedItem?.type === 'ball'
-              ? "Balón seleccionado: toca en la cancha o sobre un jugador para ubicarlo"
-              : "Seleccionar balón para colocarlo en la cancha o entregarlo a un jugador"
-          }
-        >
-          <span className="ball-emoji-icon">🏀</span>
-        </button>
-      </div>
+          >
+            <span className="ball-emoji-icon">🏀</span>
+          </button>
+        </div>
 
-      <div className="scratch-divider" />
+        <div className="scratch-sub-divider" />
 
-      {/* Numbers Palette: Our Green Team (#4 through #18) */}
-      <div className="scratch-numbers-scroll">
-        <div className="scratch-numbers-list">
-          {roster.map((player) => {
-            const isPlaced = onCourtNumbers.has(player.number);
-            const isSelected = selectedItem?.type === 'player' && selectedItem?.number === player.number;
-            const playerOnCourt = courtPlayers.find(p => p.number === player.number);
-            const hasBall = playerOnCourt?.hasBall;
+        {/* FICHAS DEL EQUIPO VERDE (#4 AL #19) */}
+        <div className="scratch-numbers-scroll">
+          <div className="scratch-numbers-list">
+            {roster.map((player) => {
+              const isPlaced = onCourtNumbers.has(player.number);
+              const isSelected = selectedItem?.type === 'player' && selectedItem?.number === player.number;
+              const playerOnCourt = courtPlayers.find(p => p.number === player.number);
+              const hasBall = playerOnCourt?.hasBall;
 
-            return (
-              <button
-                key={player.number}
-                className={`scratch-item-chip player-chip ${isSelected ? 'selected' : ''} ${
-                  isPlaced ? 'placed-court' : ''
-                } ${hasBall ? 'has-ball' : ''}`}
-                onClick={() => {
-                  if (isSelected) {
-                    onSelectItem(null);
-                  } else {
-                    onSelectItem({ type: 'player', number: player.number });
+              return (
+                <button
+                  type="button"
+                  key={player.number}
+                  className={`scratch-item-chip player-chip ${isSelected ? 'selected' : ''} ${
+                    isPlaced ? 'placed-court' : ''
+                  } ${hasBall ? 'has-ball' : ''}`}
+                  onClick={() => {
+                    if (isSelected) {
+                      onSelectItem(null);
+                    } else {
+                      onSelectItem({ type: 'player', number: player.number });
+                    }
+                  }}
+                  title={
+                    isSelected
+                      ? `#${player.number} (${player.name || 'Sin nombre'}) seleccionado: toca en la cancha para ubicarlo`
+                      : isPlaced
+                      ? `#${player.number} (${player.name || 'Sin nombre'}) (En cancha) - Toca para reubicarlo`
+                      : `#${player.number} (${player.name || 'Sin nombre'}) (En banco) - Toca para colocarlo`
                   }
-                }}
-                title={
-                  isSelected
-                    ? `#${player.number} (${player.name || 'Sin nombre'}) seleccionado: toca en la cancha para ubicarlo`
-                    : isPlaced
-                    ? `#${player.number} (${player.name || 'Sin nombre'}) (En cancha) - Toca para reubicarlo`
-                    : `#${player.number} (${player.name || 'Sin nombre'}) (En banco) - Toca para colocarlo`
-                }
-              >
-                <span className="chip-number">{player.number}</span>
-                {hasBall && <span className="chip-mini-ball">🏀</span>}
-              </button>
-            );
-          })}
+                >
+                  <span className="chip-number">{player.number}</span>
+                  {hasBall && <span className="chip-mini-ball">🏀</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     </aside>

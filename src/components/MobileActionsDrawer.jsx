@@ -448,6 +448,35 @@ export default function MobileActionsDrawer({
             <div className="mobile-section-group">
               <span className="mobile-section-title">Herramientas Scratch</span>
 
+              {/* Submode Switcher: Trazar vs Ubicar */}
+              <div className="mobile-submode-pill-box">
+                <button
+                  type="button"
+                  className={`mobile-submode-pill ${designTool === 'draw' ? 'active' : ''}`}
+                  onClick={() => onDesignToolChange?.('draw')}
+                >
+                  <span className="pill-icon">✏️</span>
+                  <div className="pill-text-col">
+                    <span className="pill-title">Modo Trazar</span>
+                    <span className="pill-desc">Arrastrar jugadores dibuja flechas</span>
+                  </div>
+                  {designTool === 'draw' && <Check size={14} className="pill-check" />}
+                </button>
+
+                <button
+                  type="button"
+                  className={`mobile-submode-pill ${designTool === 'setup' ? 'active' : ''}`}
+                  onClick={() => onDesignToolChange?.('setup')}
+                >
+                  <span className="pill-icon">📍</span>
+                  <div className="pill-text-col">
+                    <span className="pill-title">Modo Ubicar</span>
+                    <span className="pill-desc">Mover fichas sin dibujar flechas</span>
+                  </div>
+                  {designTool === 'setup' && <Check size={14} className="pill-check" />}
+                </button>
+              </div>
+
               <div className="mobile-action-buttons-list">
                 {/* Borrador */}
                 <button

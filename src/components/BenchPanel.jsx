@@ -10,7 +10,8 @@ import {
   Layers,
   RotateCcw,
   Eye,
-  Pencil
+  Pencil,
+  Save
 } from 'lucide-react';
 
 export default function BenchPanel({
@@ -98,7 +99,7 @@ export default function BenchPanel({
 
             <div className="formations-header-actions">
               <button
-                className="formation-action-icon-btn highlight"
+                className="formation-action-icon-btn save-formation-btn"
                 title="Guardar ubicación actual de cancha como nueva disposición"
                 onClick={() => {
                   onDesignToolChange?.('setup');
@@ -106,8 +107,7 @@ export default function BenchPanel({
                 }}
                 disabled={courtPlayers.length === 0}
               >
-                <Plus size={14} />
-                <span>+ Guardar</span>
+                <Save size={14} />
               </button>
 
               <button
@@ -136,7 +136,7 @@ export default function BenchPanel({
               </div>
               <div className="manager-list">
                 {formations.filter(f => f.isCustom).length === 0 ? (
-                  <p className="manager-empty">No has creado disposiciones personalizadas aún. Ubica a los jugadores en la cancha y pulsa <strong>"+ Guardar"</strong>.</p>
+                  <p className="manager-empty">No has creado disposiciones personalizadas aún. Ubica a los jugadores en la cancha y pulsa <strong>"Guardar"</strong>.</p>
                 ) : (
                   formations.filter(f => f.isCustom).map((form) => (
                     <div key={form.id} className="manager-item">

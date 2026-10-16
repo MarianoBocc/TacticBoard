@@ -108,23 +108,17 @@ export default function App() {
   const [opponentPlayers, setOpponentPlayers] = useState([]); // [{ id, number, x, y, hasBall }]
 
   // Current play metadata
-  const [currentPlayName, setCurrentPlayName] = useState('Pick & Roll Central (1-4)');
+  const [currentPlayName, setCurrentPlayName] = useState('');
   const [currentPlayDesc, setCurrentPlayDesc] = useState('');
 
   // Initial formation snapshot (for animation resets)
-  const [initialPlayers, setInitialPlayers] = useState(() => {
-    return JSON.parse(JSON.stringify(DEFAULT_FORMATIONS.half_court_horns));
-  });
+  const [initialPlayers, setInitialPlayers] = useState([]);
 
   // Current court players [{ number, x, y, hasBall }] (max 5)
-  const [courtPlayers, setCourtPlayers] = useState(() => {
-    return JSON.parse(JSON.stringify(DEFAULT_FORMATIONS.half_court_horns));
-  });
+  const [courtPlayers, setCourtPlayers] = useState([]);
 
   // Discrete sequence of tactical actions
-  const [actions, setActions] = useState(() => {
-    return JSON.parse(JSON.stringify(SAMPLE_PLAYS[0].actions));
-  });
+  const [actions, setActions] = useState([]);
 
   // Mode: 'design' (interactive board & recording) | 'animation' (playback & stepper)
   const [mode, setMode] = useState('design');
@@ -140,9 +134,7 @@ export default function App() {
 
   // In design mode: 'setup' (place players freely to define initial disposition, no vector arrows)
   // vs 'draw' (drag players to record movement vectors, double click to pass)
-  const [designTool, setDesignTool] = useState(() => {
-    return SAMPLE_PLAYS[0].actions.length === 0 ? 'setup' : 'draw';
-  });
+  const [designTool, setDesignTool] = useState('setup');
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -152,6 +144,28 @@ export default function App() {
   // Mobile drawer states (Left: Actions, Right: Players/Bench)
   const [isMobileBenchOpen, setIsMobileBenchOpen] = useState(false);
   const [isMobileActionsOpen, setIsMobileActionsOpen] = useState(false);
+
+  // Keep fresh refs for touch listener to avoid stale closures
+  const isMobileBenchOpenRef = useRef(isMobileBenchOpen);
+  const isMobileActionsOpenRef = useRef(isMobileActionsOpen);
+  const isEraserActiveRef = useRef(isEraserActive);
+  const modeRef = useRef(mode);
+
+  useEffect(() => {
+    isMobileBenchOpenRef.current = isMobileBenchOpen;
+  }, [isMobileBenchOpen]);
+
+  useEffect(() => {
+    isMobileActionsOpenRef.current = isMobileActionsOpen;
+  }, [isMobileActionsOpen]);
+
+  useEffect(() => {
+    isEraserActiveRef.current = isEraserActive;
+  }, [isEraserActive]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const handleToggleMobileActions = () => {
     setIsMobileBenchOpen(false);
@@ -163,10 +177,13 @@ export default function App() {
     setIsMobileBenchOpen(prev => !prev);
   };
 
-  // Global horizontal swipe gesture detection for mobile side drawers:
-  // - Swipe Left opens Right Drawer (Plantel / Players) or closes Left Drawer
-  // - Swipe Right opens Left Drawer (Acciones / Controls) or closes Right Drawer
+  // Horizontal swipe gesture detection for mobile side drawers:
+  // - Ergonomic Edge Zone (48px): Opening gestures must originate near the screen edges.
+  // - Priority to Tactical Canvas: Dragging players, opponents, free ball, or scrubbing with eraser
+  //   will NEVER trigger a drawer.
+  // - Closing gestures work reliably anywhere when a drawer is already open.
   useEffect(() => {
+    const EDGE_ZONE = 48; // Comfortable edge zone in px for thumbs on mobile & tablets
     let touchStartX = 0;
     let touchStartY = 0;
     let touchStartTime = 0;
@@ -182,12 +199,45 @@ export default function App() {
       touchStartY = t.clientY;
       touchStartTime = Date.now();
 
-      // Check if touch target is a draggable player/ball or inside a modal/button
       const target = e.target;
-      const isInteractive = target.closest(
-        '.player-node, .opponent-node, .free-ball-node, button, input, select, textarea, .modal-backdrop, .modal-window, .step-circle-btn, .scratch-item-chip, .formation-pill, .bench-player-card, .mobile-actions-content, .bench-roster-scroll'
+
+      // 1. Any touch on a draggable tactical token (player, opponent, ball) belongs 100% to board play
+      const isTacticalToken = target && target.closest && target.closest(
+        '.player-svg-node, .player-node, .opponent-node, .free-ball-node'
       );
-      shouldIgnore = !!isInteractive;
+      if (isTacticalToken) {
+        shouldIgnore = true;
+        return;
+      }
+
+      // 2. Interactive UI controls (buttons, inputs, modal, scratch dock palette, chips)
+      const isInteractiveUI = target && target.closest && target.closest(
+        'button, input, select, textarea, .modal-backdrop, .modal-window, .step-circle-btn, .scratch-item-chip, .formation-pill, .bench-player-card, .mobile-actions-content, .bench-roster-scroll, .scratch-dock'
+      );
+      if (isInteractiveUI) {
+        shouldIgnore = true;
+        return;
+      }
+
+      // 3. If eraser tool is active, scrubbing the board must not trigger drawer opening
+      if (isEraserActiveRef.current) {
+        shouldIgnore = true;
+        return;
+      }
+
+      // 4. When neither drawer is open, gesture MUST originate in the edge zone (left or right)
+      const isAnyDrawerOpen = isMobileActionsOpenRef.current || isMobileBenchOpenRef.current;
+      if (!isAnyDrawerOpen) {
+        const isLeftEdge = touchStartX <= EDGE_ZONE;
+        const isRightEdge = touchStartX >= (window.innerWidth - EDGE_ZONE);
+        if (!isLeftEdge && !isRightEdge) {
+          // Started in the middle of the board -> reserved for board interaction
+          shouldIgnore = true;
+          return;
+        }
+      }
+
+      shouldIgnore = false;
     };
 
     const handleTouchEnd = (e) => {
@@ -200,26 +250,33 @@ export default function App() {
       const distY = Math.abs(deltaY);
       const elapsed = Date.now() - touchStartTime;
 
-      // Reliable horizontal swipe threshold
-      if (distX > 45 && distX > distY * 1.25 && elapsed < 800) {
-        if (deltaX < 0) {
-          // Swipe Left (dedo hacia la izquierda) -> abre Plantel (derecha) o cierra Acciones
-          setIsMobileActionsOpen(prevActions => {
-            if (prevActions) {
-              return false;
-            }
-            setIsMobileBenchOpen(true);
-            return false;
-          });
-        } else {
-          // Swipe Right (dedo hacia la derecha) -> abre Acciones (izquierda) o cierra Plantel
-          setIsMobileBenchOpen(prevBench => {
-            if (prevBench) {
-              return false;
-            }
+      // Reliable horizontal swipe threshold (>32px, predominantly horizontal, <800ms)
+      if (distX > 32 && distX > distY * 1.15 && elapsed < 800) {
+        const isActionsOpen = isMobileActionsOpenRef.current;
+        const isBenchOpen = isMobileBenchOpenRef.current;
+
+        if (deltaX > 0) {
+          // Swipe Right (dedo hacia la derecha)
+          // A) If Right Drawer (Plantel) is open, close it
+          if (isBenchOpen) {
+            setIsMobileBenchOpen(false);
+            return;
+          }
+          // B) If Left Drawer (Acciones) is closed, OPEN IT if gesture began near the left edge
+          if (!isActionsOpen && touchStartX <= EDGE_ZONE) {
             setIsMobileActionsOpen(true);
-            return false;
-          });
+          }
+        } else {
+          // Swipe Left (dedo hacia la izquierda)
+          // A) If Left Drawer (Acciones) is open, close it
+          if (isActionsOpen) {
+            setIsMobileActionsOpen(false);
+            return;
+          }
+          // B) If Right Drawer (Plantel) is closed, OPEN IT if gesture began near the right edge
+          if (!isBenchOpen && touchStartX >= (window.innerWidth - EDGE_ZONE)) {
+            setIsMobileBenchOpen(true);
+          }
         }
       }
     };
@@ -258,7 +315,7 @@ export default function App() {
     return [];
   });
 
-  const [currentFormationId, setCurrentFormationId] = useState('half_court_horns');
+  const [currentFormationId, setCurrentFormationId] = useState(null);
 
   // Sync custom formations with localStorage
   useEffect(() => {
@@ -290,7 +347,7 @@ export default function App() {
       const act = actionList[i];
       if (!act) continue;
 
-      if (act.type === 'move') {
+      if (act.type === 'move' || act.type === 'screen') {
         const p = players.find(item => item.number === act.playerId);
         if (p) {
           p.x = act.to.x;
@@ -353,15 +410,57 @@ export default function App() {
   // Switch between 'setup' (Posición Inicial / Acomodar) and 'draw' (Trazar Jugada)
   const handleDesignToolChange = (newTool) => {
     setDesignTool(newTool);
+    setIsEraserActive(false);
+
+    // In Scratch mode (Pizarra Rápida), players must NEVER disappear or reset!
+    // They stay exactly where they are so the coach can freely edit their positions or draw.
+    if (mode === 'scratch') {
+      if (newTool === 'draw') {
+        setSelectedScratchItem(null);
+      }
+      if (courtPlayers.length > 0) {
+        setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
+      }
+      return;
+    }
+
     if (newTool === 'setup') {
-      // In setup mode, place players back to starting coordinates so coach can adjust them
-      setCourtPlayers(JSON.parse(JSON.stringify(initialPlayers)));
+      // In design mode setup: if initialPlayers has players, restore them so coach can adjust starting positions
+      if (initialPlayers.length > 0) {
+        setCourtPlayers(JSON.parse(JSON.stringify(initialPlayers)));
+      } else if (courtPlayers.length > 0) {
+        setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
+      }
     } else {
       // In draw mode, if actions exist, place players at the state corresponding to the actions
       if (actions.length > 0) {
+        const base = initialPlayers.length > 0 ? initialPlayers : courtPlayers;
         const targetStep = activeStep === -1 ? actions.length - 1 : activeStep;
-        const live = computePlayersAtStep(initialPlayers, actions, targetStep);
+        const live = computePlayersAtStep(base, actions, targetStep);
         setCourtPlayers(live);
+      } else if (courtPlayers.length > 0) {
+        setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
+      }
+    }
+  };
+
+  // Handle mode change cleanly across the whole app without losing players
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    if (newMode === 'animation') {
+      setActiveStep(-1);
+    } else if (newMode === 'scratch') {
+      // Retain current court players in Scratch mode!
+      if (courtPlayers.length > 0) {
+        setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
+      }
+    } else {
+      // When going to design mode:
+      if (actions.length > 0 && initialPlayers.length > 0) {
+        const finalPlayers = computePlayersAtStep(initialPlayers, actions, actions.length - 1);
+        setCourtPlayers(finalPlayers);
+      } else if (courtPlayers.length > 0) {
+        setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
       }
     }
   };
@@ -386,15 +485,55 @@ export default function App() {
         return p;
       }));
 
-      // If user repositions starting base, clear any old play vectors to avoid detached arrows
-      if (actions.length > 0) {
+      // If user repositions starting base in design mode, clear any old play vectors to avoid detached arrows
+      if (actions.length > 0 && mode !== 'scratch') {
         setActions([]);
       }
       return;
     }
 
     // DRAW MODE:
-    // Check if movement is directed towards the opponent's hoop (Tiro al aro)
+    // 1. Check if dropped on/near an opponent defender -> CORTINA / BLOQUEO (SCREEN)
+    const targetOpp = opponentPlayers.find(o => Math.hypot(o.x - toCoords.x, o.y - toCoords.y) < 8.0);
+    if (targetOpp) {
+      // Calculate contact spot right on the defender's perimeter so both tokens stay visible
+      const distFromOpp = Math.hypot(toCoords.x - targetOpp.x, toCoords.y - targetOpp.y);
+      let screenSpot = toCoords;
+      if (distFromOpp < 3.8) {
+        // Approached from fromCoords towards targetOpp: place screener at contact boundary
+        const angle = Math.atan2(targetOpp.y - fromCoords.y, targetOpp.x - fromCoords.x);
+        screenSpot = {
+          x: targetOpp.x - Math.cos(angle) * 4.4,
+          y: targetOpp.y - Math.sin(angle) * 4.4
+        };
+      }
+
+      const newScreenAction = {
+        id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+        type: 'screen',
+        playerId: playerNumber,
+        opponentId: targetOpp.id,
+        opponentNumber: targetOpp.number,
+        hasBall: hadBall,
+        from: fromCoords,
+        to: screenSpot,
+        screenTarget: { x: targetOpp.x, y: targetOpp.y },
+        description: `#${playerNumber} Cortina a Rival #${targetOpp.number}`
+      };
+
+      setActions(prev => [...prev, newScreenAction]);
+
+      // Move player to screen spot
+      setCourtPlayers(prev => prev.map(p => {
+        if (p.number === playerNumber) {
+          return { ...p, x: screenSpot.x, y: screenSpot.y };
+        }
+        return p;
+      }));
+      return;
+    }
+
+    // 2. Check if movement is directed towards the opponent's hoop (Tiro al aro)
     // ONLY players with the ball in possession can shoot at the basket!
     const isHalfCourt = courtType === 'half';
     const topHoop = isHalfCourt ? { x: 50, y: 13.9 } : { x: 50, y: 6.4 };
@@ -641,9 +780,9 @@ export default function App() {
   const handleNewPlay = () => {
     setCurrentPlayName('Nueva Jugada');
     setCurrentPlayDesc('');
-    const defaultPlayers = JSON.parse(JSON.stringify(DEFAULT_FORMATIONS.half_court_horns));
-    setCourtPlayers(defaultPlayers);
-    setInitialPlayers(JSON.parse(JSON.stringify(defaultPlayers)));
+    setCourtPlayers([]);
+    setInitialPlayers([]);
+    setCurrentFormationId(null);
     setActions([]);
     setActiveStep(-1);
     setIsPlaying(false);
@@ -703,18 +842,22 @@ export default function App() {
     if (selectedScratchItem.type === 'player') {
       const playerNum = selectedScratchItem.number;
       setCourtPlayers(prev => {
+        let updated;
         const exists = prev.some(p => p.number === playerNum);
         if (exists) {
           // Reposition existing player
-          return prev.map(p => p.number === playerNum ? { ...p, x: pctCoords.x, y: pctCoords.y } : p);
+          updated = prev.map(p => p.number === playerNum ? { ...p, x: pctCoords.x, y: pctCoords.y } : p);
         } else {
           // Add player if under 5 on court
           if (prev.length >= 5) {
             // Replace oldest player
-            return [...prev.slice(1), { number: playerNum, x: pctCoords.x, y: pctCoords.y, hasBall: false }];
+            updated = [...prev.slice(1), { number: playerNum, x: pctCoords.x, y: pctCoords.y, hasBall: false }];
+          } else {
+            updated = [...prev, { number: playerNum, x: pctCoords.x, y: pctCoords.y, hasBall: false }];
           }
-          return [...prev, { number: playerNum, x: pctCoords.x, y: pctCoords.y, hasBall: false }];
         }
+        setInitialPlayers(JSON.parse(JSON.stringify(updated)));
+        return updated;
       });
       setSelectedScratchItem(null);
     } else if (selectedScratchItem.type === 'opponent') {
@@ -737,14 +880,17 @@ export default function App() {
       if (targetOpp) {
         setOpponentPlayers(prev => prev.map(o => ({ ...o, hasBall: o.id === targetOpp.id })));
         setCourtPlayers(prev => prev.map(p => ({ ...p, hasBall: false })));
+        setInitialPlayers(prev => prev.map(p => ({ ...p, hasBall: false })));
         setFreeBallPos(null);
       } else if (targetPlayer) {
         setCourtPlayers(prev => prev.map(p => ({ ...p, hasBall: p.number === targetPlayer.number })));
+        setInitialPlayers(prev => prev.map(p => ({ ...p, hasBall: p.number === targetPlayer.number })));
         setOpponentPlayers(prev => prev.map(o => ({ ...o, hasBall: false })));
         setFreeBallPos(null);
       } else {
         // Freestanding ball on court (loose ball)
         setCourtPlayers(prev => prev.map(p => ({ ...p, hasBall: false })));
+        setInitialPlayers(prev => prev.map(p => ({ ...p, hasBall: false })));
         setOpponentPlayers(prev => prev.map(o => ({ ...o, hasBall: false })));
         setFreeBallPos({ x: pctCoords.x, y: pctCoords.y });
       }
@@ -880,11 +1026,6 @@ export default function App() {
             onPlayerPass={handlePlayerPass}
             onOpponentMove={handleOpponentMove}
             onRemovePlayer={handleRemovePlayerFromCourt}
-            onSaveFormation={() => setIsSaveFormationModalOpen(true)}
-            onSavePlay={() => {
-              setModalType('save');
-              setIsModalOpen(true);
-            }}
             freeBallPos={freeBallPos}
             onFreeBallMove={handleFreeBallMove}
             selectedScratchItem={selectedScratchItem}
@@ -908,6 +1049,9 @@ export default function App() {
               onToggleEraser={() => setIsEraserActive(prev => !prev)}
               onClearDrawings={handleClearDrawings}
               onReturnToBench={handleReturnToBench}
+              designTool={designTool}
+              onDesignToolChange={handleDesignToolChange}
+              actionsCount={actions.length}
             />
           )}
         </main>
@@ -938,16 +1082,7 @@ export default function App() {
       {/* Bottom Controls Bar for Tablet Thumbs / Desktop */}
       <ControlsBar
         mode={mode}
-        onModeChange={(newMode) => {
-          setMode(newMode);
-          if (newMode === 'animation') {
-            setActiveStep(-1); // Start at initial positions
-          } else {
-            // When going back to design, place players at the final state
-            const finalPlayers = computePlayersAtStep(initialPlayers, actions, actions.length - 1);
-            setCourtPlayers(finalPlayers);
-          }
-        }}
+        onModeChange={handleModeChange}
         designTool={designTool}
         onDesignToolChange={handleDesignToolChange}
         actions={actions}
@@ -990,15 +1125,7 @@ export default function App() {
         isOpen={isMobileActionsOpen}
         onClose={() => setIsMobileActionsOpen(false)}
         mode={mode}
-        onModeChange={(newMode) => {
-          setMode(newMode);
-          if (newMode === 'animation') {
-            setActiveStep(-1);
-          } else {
-            const finalPlayers = computePlayersAtStep(initialPlayers, actions, actions.length - 1);
-            setCourtPlayers(finalPlayers);
-          }
-        }}
+        onModeChange={handleModeChange}
         designTool={designTool}
         onDesignToolChange={handleDesignToolChange}
         actions={actions}
@@ -1037,26 +1164,7 @@ export default function App() {
         currentPlayName={currentPlayName}
       />
 
-      {/* Floating edge pills for mobile quick access hints */}
-      <div className="mobile-edge-tabs mobile-only">
-        <button 
-          className="mobile-edge-pill left-pill"
-          onClick={handleToggleMobileActions}
-          title="Abrir Acciones (o desliza desde la izquierda)"
-        >
-          <Sliders size={13} />
-          <span>Acciones</span>
-        </button>
 
-        <button 
-          className="mobile-edge-pill right-pill"
-          onClick={handleToggleMobileBench}
-          title="Abrir Plantel (o desliza desde la derecha)"
-        >
-          <span>Plantel</span>
-          <Users size={13} />
-        </button>
-      </div>
 
       {/* Floating mini playback bar when in animation mode on mobile */}
       {mode === 'animation' && !isMobileActionsOpen && !isMobileBenchOpen && (

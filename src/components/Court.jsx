@@ -18,8 +18,6 @@ export default function Court({
   onPlayerPass,
   onOpponentMove,
   onRemovePlayer,
-  onSaveFormation,
-  onSavePlay,
   freeBallPos = null,
   onFreeBallMove,
   selectedScratchItem = null,
@@ -266,6 +264,15 @@ export default function Court({
   // Find who currently has the ball
   const ballCarrier = courtPlayers.find(p => p.hasBall);
 
+  // Set of player numbers who are actively setting a screen in visible actions
+  const screeningPlayerNumbers = new Set(
+    visibleActions.filter(act => act.type === 'screen').map(act => act.playerId)
+  );
+
+  // Check if dragged player is hovering near an opponent to set a screen
+  const isDraggingNearOpponent = draggingPlayer && livePos && (designTool === 'draw' || mode === 'design') &&
+    opponentPlayers.some(opp => Math.hypot(opp.x - livePos.x, opp.y - livePos.y) < 8.0);
+
   return (
     <div 
       className={`court-wrapper ${theme}-theme ${courtType === 'full' ? 'full-court-vertical' : 'half-court-view'} ${isEraserActive ? 'eraser-mode-active' : ''}`}
@@ -353,6 +360,24 @@ export default function Court({
           <filter id="shotGlow" x="-25%" y="-25%" width="150%" height="150%">
             <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#22c55e" floodOpacity="0.9" />
           </filter>
+
+          {/* Screen / Cortina Vector Glow Filter */}
+          <filter id="screenGlow" x="-25%" y="-25%" width="150%" height="150%">
+            <feDropShadow dx="0" dy="0" stdDeviation="5" floodColor="#eab308" floodOpacity="0.85" />
+          </filter>
+
+          {/* Gradients for Step Badges (Shot Ball & Screen Shield) */}
+          <linearGradient id="ballGradientShot" x1="20%" y1="20%" x2="80%" y2="80%">
+            <stop offset="0%" stopColor="#ff8c00" />
+            <stop offset="50%" stopColor="#ea580c" />
+            <stop offset="100%" stopColor="#c2410c" />
+          </linearGradient>
+
+          <linearGradient id="shieldGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#fef08a" />
+            <stop offset="40%" stopColor="#eab308" />
+            <stop offset="100%" stopColor="#ca8a04" />
+          </linearGradient>
 
           <filter id="ballCarrierGlow" x="-50%" y="-50%" width="200%" height="200%">
             <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#ff8800" floodOpacity="0.9" />
@@ -667,29 +692,27 @@ export default function Court({
                     filter="url(#passGlow)"
                     pointerEvents="none"
                   />
-                  {/* Pass sequence number badge */}
-                  <circle
-                    cx={(startSvg.x + endSvg.x) / 2}
-                    cy={(startSvg.y + endSvg.y) / 2}
-                    r="14"
-                    fill="#ff6600"
-                    stroke="#ffffff"
-                    strokeWidth="2.5"
-                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.8))"
-                    pointerEvents="all"
-                  />
-                  <text
-                    x={(startSvg.x + endSvg.x) / 2}
-                    y={(startSvg.y + endSvg.y) / 2 + 5}
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize="13"
-                    fontWeight="800"
-                    fontFamily="var(--font-display)"
-                    pointerEvents="none"
-                  >
-                    {idx + 1}
-                  </text>
+                  {/* Pass sequence number badge - Bigger and bold */}
+                  <g transform={`translate(${(startSvg.x + endSvg.x) / 2}, ${(startSvg.y + endSvg.y) / 2})`} pointerEvents="all">
+                    <circle
+                      r="19"
+                      fill="#ff6600"
+                      stroke="#ffffff"
+                      strokeWidth="3"
+                      filter="drop-shadow(0 3px 6px rgba(0,0,0,0.85))"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="6"
+                      fill="#ffffff"
+                      fontSize="17"
+                      fontWeight="900"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                    >
+                      {idx + 1}
+                    </text>
+                  </g>
                 </g>
               );
             } else if (action.type === 'shot') {
@@ -753,34 +776,200 @@ export default function Court({
                     filter="url(#shotGlow)"
                     pointerEvents="none"
                   />
-                  {/* Basketball icon right at the target basket */}
-                  <g transform={`translate(${endSvg.x}, ${endSvg.y})`} pointerEvents="all">
-                    <circle r="14" fill="#ff7700" stroke="#ffffff" strokeWidth="2.5" filter="drop-shadow(0 2px 6px rgba(0,0,0,0.8))" />
-                    <text textAnchor="middle" dy="4.5" fontSize="13" pointerEvents="none">🏀</text>
+                  {/* Target rim marker at hoop */}
+                  <g transform={`translate(${endSvg.x}, ${endSvg.y})`} pointerEvents="none">
+                    <circle r="16" fill="rgba(34, 197, 94, 0.2)" stroke="#22c55e" strokeWidth="3" />
+                    <circle r="6" fill="#22c55e" />
                   </g>
-                  {/* Step order badge on trajectory */}
-                  <circle
-                    cx={(startSvg.x + endSvg.x) / 2}
-                    cy={(startSvg.y + endSvg.y) / 2}
-                    r="14"
-                    fill="#15803d"
-                    stroke="#ffffff"
-                    strokeWidth="2.5"
-                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.8))"
+                  {/* Step order badge on trajectory - DENTRO DE UNA PELOTA DE BÁSQUETBOL */}
+                  <g transform={`translate(${(startSvg.x + endSvg.x) / 2}, ${(startSvg.y + endSvg.y) / 2})`} pointerEvents="all">
+                    {/* Outer shadow */}
+                    <circle r="22" fill="rgba(0, 0, 0, 0.75)" transform="translate(0, 2)" />
+                    {/* Basketball body with rich leather gradient */}
+                    <circle
+                      r="21"
+                      fill="url(#ballGradientShot)"
+                      stroke="#ffffff"
+                      strokeWidth="2.8"
+                      filter="url(#shotGlow)"
+                    />
+                    {/* Basketball seam lines */}
+                    <line x1="-21" y1="0" x2="21" y2="0" stroke="#111827" strokeWidth="2" strokeLinecap="round" />
+                    <line x1="0" y1="-21" x2="0" y2="21" stroke="#111827" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M -15 -14 C -7 -7, -7 7, -15 14" fill="none" stroke="#111827" strokeWidth="1.6" />
+                    <path d="M 15 -14 C 7 -7, 7 7, 15 14" fill="none" stroke="#111827" strokeWidth="1.6" />
+                    {/* Step number boldly centered inside the basketball */}
+                    <text
+                      textAnchor="middle"
+                      dy="6.5"
+                      fill="#ffffff"
+                      fontSize="18"
+                      fontWeight="900"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                      style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1)) drop-shadow(0 0 2px rgba(0,0,0,1))' }}
+                    >
+                      {idx + 1}
+                    </text>
+                  </g>
+                </g>
+              );
+            } else if (action.type === 'screen') {
+              // SCREEN VECTOR (CORTINA / BLOQUEO - AMBER GOLD WITH OFFICIAL PERPENDICULAR T-BAR)
+              const dx = endSvg.x - startSvg.x;
+              const dy = endSvg.y - startSvg.y;
+              const dist = Math.hypot(dx, dy) || 1;
+              const px = -dy / dist;
+              const py = dx / dist;
+              const barLength = 26; // Width of the screen barrier T-bar
+
+              const barX1 = endSvg.x + px * barLength;
+              const barY1 = endSvg.y + py * barLength;
+              const barX2 = endSvg.x - px * barLength;
+              const barY2 = endSvg.y - py * barLength;
+
+              return (
+                <g 
+                  key={action.id || `screen-${idx}`} 
+                  className="screen-vector-group"
+                  onClick={(e) => {
+                    if (isEraserActive) {
+                      e.stopPropagation();
+                      onDeleteAction?.(action.id);
+                    }
+                  }}
+                  style={{ cursor: isEraserActive ? 'crosshair' : 'default' }}
+                >
+                  {/* Invisible wide hit area for finger swipe & tap eraser */}
+                  <line
+                    x1={startSvg.x}
+                    y1={startSvg.y}
+                    x2={endSvg.x}
+                    y2={endSvg.y}
+                    stroke="transparent"
+                    strokeWidth="38"
                     pointerEvents="all"
                   />
-                  <text
-                    x={(startSvg.x + endSvg.x) / 2}
-                    y={(startSvg.y + endSvg.y) / 2 + 5}
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize="12"
-                    fontWeight="800"
-                    fontFamily="var(--font-display)"
+                  <line
+                    x1={barX1}
+                    y1={barY1}
+                    x2={barX2}
+                    y2={barY2}
+                    stroke="transparent"
+                    strokeWidth="38"
+                    pointerEvents="all"
+                  />
+
+                  {/* Subtle wide glow underline */}
+                  <line
+                    x1={startSvg.x}
+                    y1={startSvg.y}
+                    x2={endSvg.x}
+                    y2={endSvg.y}
+                    stroke="rgba(234, 179, 8, 0.35)"
+                    strokeWidth="16"
+                    strokeLinecap="round"
                     pointerEvents="none"
-                  >
-                    🎯{idx + 1}
-                  </text>
+                  />
+                  <line
+                    x1={barX1}
+                    y1={barY1}
+                    x2={barX2}
+                    y2={barY2}
+                    stroke="rgba(234, 179, 8, 0.45)"
+                    strokeWidth="18"
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                  />
+
+                  {/* Dark contrast backline */}
+                  <line
+                    x1={startSvg.x}
+                    y1={startSvg.y}
+                    x2={endSvg.x}
+                    y2={endSvg.y}
+                    stroke="rgba(0, 0, 0, 0.85)"
+                    strokeWidth="10"
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                  />
+                  <line
+                    x1={barX1}
+                    y1={barY1}
+                    x2={barX2}
+                    y2={barY2}
+                    stroke="rgba(0, 0, 0, 0.95)"
+                    strokeWidth="12"
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                  />
+
+                  {/* Main Golden Amber Approach Line */}
+                  <line
+                    x1={startSvg.x}
+                    y1={startSvg.y}
+                    x2={endSvg.x}
+                    y2={endSvg.y}
+                    stroke="#eab308"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    pointerEvents="none"
+                  />
+
+                  {/* Perpendicular Screen T-Bar (Símbolo oficial de Cortina / Bloqueo en Pizarra) */}
+                  <line
+                    x1={barX1}
+                    y1={barY1}
+                    x2={barX2}
+                    y2={barY2}
+                    stroke="#fbbf24"
+                    strokeWidth="7"
+                    strokeLinecap="round"
+                    filter="url(#screenGlow)"
+                    pointerEvents="none"
+                  />
+
+                  {/* Contact point caps */}
+                  <circle cx={barX1} cy={barY1} r="4.5" fill="#fef08a" stroke="#000000" strokeWidth="1.5" pointerEvents="none" />
+                  <circle cx={barX2} cy={barY2} r="4.5" fill="#fef08a" stroke="#000000" strokeWidth="1.5" pointerEvents="none" />
+
+                  {/* Action order badge - DENTRO DEL ESCUDO */}
+                  <g transform={`translate(${(startSvg.x + endSvg.x) / 2}, ${(startSvg.y + endSvg.y) / 2})`} pointerEvents="all">
+                    {/* Shield drop shadow */}
+                    <path
+                      d="M -20 -22 L 20 -22 Q 22 6 0 27 Q -22 6 -20 -22 Z"
+                      fill="rgba(0, 0, 0, 0.75)"
+                      transform="translate(0, 2.5)"
+                    />
+                    {/* Shield Body - Golden Amber gradient with crisp white outline */}
+                    <path
+                      d="M -20 -22 L 20 -22 Q 22 6 0 27 Q -22 6 -20 -22 Z"
+                      fill="url(#shieldGradient)"
+                      stroke="#ffffff"
+                      strokeWidth="2.8"
+                      filter="url(#screenGlow)"
+                    />
+                    {/* Inner shield inset accent line */}
+                    <path
+                      d="M -15 -17 L 15 -17 Q 16 4 0 21 Q -16 4 -15 -17 Z"
+                      fill="none"
+                      stroke="rgba(0, 0, 0, 0.25)"
+                      strokeWidth="1.5"
+                    />
+                    {/* Number placed directly INSIDE the shield */}
+                    <text
+                      textAnchor="middle"
+                      dy="5.5"
+                      fill="#0f172a"
+                      fontSize="18"
+                      fontWeight="900"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                      style={{ filter: 'drop-shadow(0 1px 1px rgba(255,255,255,0.6))' }}
+                    >
+                      {idx + 1}
+                    </text>
+                  </g>
                 </g>
               );
             } else {
@@ -833,29 +1022,27 @@ export default function Court({
                     markerEnd={hasBall ? "url(#arrow-with-ball)" : "url(#arrow-without-ball)"}
                     pointerEvents="none"
                   />
-                  {/* Action order badge */}
-                  <circle
-                    cx={(startSvg.x + endSvg.x) / 2}
-                    cy={(startSvg.y + endSvg.y) / 2}
-                    r="13"
-                    fill={hasBall ? "#0284c7" : "#334155"}
-                    stroke="#ffffff"
-                    strokeWidth="2"
-                    filter="drop-shadow(0 2px 5px rgba(0,0,0,0.8))"
-                    pointerEvents="all"
-                  />
-                  <text
-                    x={(startSvg.x + endSvg.x) / 2}
-                    y={(startSvg.y + endSvg.y) / 2 + 4.5}
-                    textAnchor="middle"
-                    fill="#ffffff"
-                    fontSize="12"
-                    fontWeight="800"
-                    fontFamily="var(--font-display)"
-                    pointerEvents="none"
-                  >
-                    {idx + 1}
-                  </text>
+                  {/* Action order badge - Bigger and bold */}
+                  <g transform={`translate(${(startSvg.x + endSvg.x) / 2}, ${(startSvg.y + endSvg.y) / 2})`} pointerEvents="all">
+                    <circle
+                      r="19"
+                      fill={hasBall ? "#0284c7" : "#334155"}
+                      stroke="#ffffff"
+                      strokeWidth="3"
+                      filter="drop-shadow(0 3px 6px rgba(0,0,0,0.85))"
+                    />
+                    <text
+                      textAnchor="middle"
+                      dy="6"
+                      fill="#ffffff"
+                      fontSize="17"
+                      fontWeight="900"
+                      fontFamily="var(--font-display)"
+                      pointerEvents="none"
+                    >
+                      {idx + 1}
+                    </text>
+                  </g>
                 </g>
               );
             }
@@ -946,10 +1133,13 @@ export default function Court({
             const rosterPlayer = roster.find(r => r.number === player.number);
             const playerName = player.name || rosterPlayer?.name;
 
+            // Marco circular al jugador que cortina
+            const isScreener = screeningPlayerNumbers.has(player.number) || (isBeingDragged && isDraggingNearOpponent);
+
             return (
               <g
                 key={player.number}
-                className={`player-svg-node ${isCarrier ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                className={`player-svg-node ${isCarrier ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''} ${isScreener ? 'screener-active' : ''}`}
                 transform={`translate(${svgPos.x}, ${svgPos.y})`}
                 onPointerDown={(e) => handlePointerDown(player, e)}
                 onClick={(e) => {
@@ -969,6 +1159,17 @@ export default function Court({
               >
                 {/* Touch hit area for easier finger manipulation on tablets */}
                 <circle r="56" fill="transparent" pointerEvents="all" />
+
+                {/* Marco circular al jugador que cortina */}
+                {isScreener && (
+                  <circle
+                    r="50"
+                    fill="none"
+                    stroke="#eab308"
+                    strokeWidth="4"
+                    className="screener-circular-frame"
+                  />
+                )}
 
                 {/* Glow ring if ball carrier */}
                 {isCarrier && (
@@ -1070,14 +1271,54 @@ export default function Court({
             const oppHasBall = opp.hasBall;
             const oppName = opp.name;
 
+            // Visual hint if dragging player onto this opponent to set a screen
+            const isTargetOfScreen = draggingPlayer && livePos && (designTool === 'draw' || mode === 'design') &&
+              Math.hypot(opp.x - livePos.x, opp.y - livePos.y) < 8.0;
+
             return (
               <g
                 key={`opp-${opp.id}`}
-                className={`player-svg-node opponent-node ${oppHasBall ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''}`}
+                className={`player-svg-node opponent-node ${oppHasBall ? 'carrier' : ''} ${isBeingDragged ? 'dragging' : ''} ${isTargetOfScreen ? 'target-screen' : ''}`}
                 transform={`translate(${svgPos.x}, ${svgPos.y})`}
                 onPointerDown={(e) => handleOpponentPointerDown(opp, e)}
                 style={{ cursor: isEraserActive ? 'crosshair' : 'grab' }}
               >
+                {/* Visual feedback when dragging a player near this opponent to set a screen - NO dashed lines */}
+                {isTargetOfScreen && (
+                  <g className="screen-hover-indicator" pointerEvents="none">
+                    <circle
+                      r="49"
+                      fill="none"
+                      stroke="#ef4444"
+                      strokeWidth="3.5"
+                      className="screener-target-solid-frame"
+                    />
+                    <g transform="translate(0, -56)">
+                      <rect
+                        x="-44"
+                        y="-12"
+                        width="88"
+                        height="24"
+                        rx="12"
+                        fill="#0f172a"
+                        stroke="#eab308"
+                        strokeWidth="2"
+                        filter="drop-shadow(0 3px 6px rgba(0,0,0,0.85))"
+                      />
+                      <text
+                        textAnchor="middle"
+                        dy="4.5"
+                        fill="#fef08a"
+                        fontSize="11"
+                        fontWeight="900"
+                        fontFamily="var(--font-display)"
+                      >
+                        🛡️ CORTINA
+                      </text>
+                    </g>
+                  </g>
+                )}
+
                 {/* Touch hit area */}
                 <circle r="56" fill="transparent" pointerEvents="all" />
 
@@ -1217,35 +1458,19 @@ export default function Court({
                     : `📍 Toca en la cancha para colocar al jugador #${selectedScratchItem.number}`}
                 </span>
               </div>
-            ) : null}
+            ) : designTool === 'draw' ? (
+              <div className="hud-pill pulse-cyan">
+                <span>✏️ Modo Trazos: arrastra jugadores para dibujar flechas o cortinas a rivales</span>
+              </div>
+            ) : (
+              <div className="hud-pill pulse-green">
+                <span>📍 Modo Ubicar: arrastra jugadores para posicionar</span>
+              </div>
+            )}
           </div>
         ) : isAssigningBall ? (
           <div className="hud-pill pulse-orange">
             <span>🏀 Toca a un jugador para entregarle el balón</span>
-          </div>
-        ) : mode === 'design' ? (
-          <div className="hud-pill-group">
-            {designTool === 'setup' ? (
-              onSaveFormation && courtPlayers.length > 0 && (
-                <button 
-                  className="hud-formation-btn highlight-save"
-                  onClick={onSaveFormation}
-                  title="Guardar la ubicación actual de los jugadores como una Disposición inicial"
-                >
-                  <span>💾 Guardar Disposición</span>
-                </button>
-              )
-            ) : (
-              onSavePlay && actions.length > 0 && (
-                <button 
-                  className="hud-formation-btn highlight-save"
-                  onClick={onSavePlay}
-                  title="Guardar esta jugada con sus acciones en tu biblioteca"
-                >
-                  <span>💾 Guardar Jugada ({actions.length})</span>
-                </button>
-              )
-            )}
           </div>
         ) : null}
       </div>

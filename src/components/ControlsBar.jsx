@@ -105,6 +105,30 @@ export default function ControlsBar({
         {mode === 'scratch' ? (
           /* SCRATCH MODE TOOLS */
           <div className="design-toolbar scratch-toolbar">
+            {/* Tool Mode: Trazar vs Ubicar */}
+            <div className="design-submode-group">
+              <button
+                type="button"
+                className={`tool-submode-btn ${designTool === 'draw' ? 'active-draw' : ''}`}
+                onClick={() => onDesignToolChange?.('draw')}
+                title="Modo Trazar: al arrastrar jugadores se dibujan flechas tácticas"
+              >
+                <span>✏️</span>
+                <span>Trazar</span>
+              </button>
+              <button
+                type="button"
+                className={`tool-submode-btn ${designTool === 'setup' ? 'active-setup' : ''}`}
+                onClick={() => onDesignToolChange?.('setup')}
+                title="Modo Ubicar: mueve y coloca a los jugadores libremente sin flechas"
+              >
+                <span>📍</span>
+                <span>Ubicar</span>
+              </button>
+            </div>
+
+            <div className="toolbar-divider" />
+
             {/* Toggle Borrador */}
             <button
               className={`tool-btn ${isEraserActive ? 'active-eraser-btn' : ''}`}
