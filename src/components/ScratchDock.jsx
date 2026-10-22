@@ -1,5 +1,5 @@
 import React from 'react';
-import { Eraser, Trash2, Users, Shield, Pencil, MapPin } from 'lucide-react';
+import { Eraser, Trash2, Users, Shield, Pencil, MapPin, Zap } from 'lucide-react';
 
 export default function ScratchDock({
   courtType = 'half', // 'half' | 'full'
@@ -16,7 +16,9 @@ export default function ScratchDock({
   onReturnToBench,
   designTool = 'setup', // 'setup' (Ubicar) | 'draw' (Trazar)
   onDesignToolChange,
-  actionsCount = 0
+  actionsCount = 0,
+  currentPhase = 1,
+  onNextPhase
 }) {
   const onCourtNumbers = new Set(courtPlayers.map(p => p.number));
   const onCourtOpponents = new Set(opponentPlayers.map(o => o.number));
@@ -56,6 +58,20 @@ export default function ScratchDock({
             <span className="scratch-btn-label">Ubicar</span>
           </button>
         </div>
+
+        {/* Botón de Fase en Modo Trazar */}
+        {designTool === 'draw' && (
+          <button
+            type="button"
+            className="scratch-tool-btn phase-step-btn"
+            onClick={onNextPhase}
+            title={`Fase táctica ${currentPhase}: las acciones se ejecutan simultáneamente. Toca para avanzar a la Siguiente Fase`}
+          >
+            <Zap size={18} />
+            <span className="scratch-btn-label">Fase {currentPhase}</span>
+            <span className="scratch-phase-plus">+</span>
+          </button>
+        )}
 
         {/* Botón Borrador táctil */}
         <button

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 
 export default function Court({
   courtType = 'half', // 'half' | 'full'
@@ -222,7 +222,7 @@ export default function Court({
       const distance = Math.hypot(dx, dy);
 
       if (distance >= 1.5 && onOpponentMove) {
-        onOpponentMove(draggingOpponent, livePos);
+        onOpponentMove(draggingOpponent, opponentDragOrigin, livePos);
       }
       setDraggingOpponent(null);
       setOpponentDragOrigin(null);
@@ -255,11 +255,22 @@ export default function Court({
     }
   };
 
+  // Unique phases
+  const phases = useMemo(() => {
+    const set = new Set(actions.map(a => a.phase || 1));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [actions]);
+
   // Visible actions up to activeStep (or all if activeStep is -1)
   // When in setup mode, vectors are hidden so the coach has a pristine court to place players!
-  const visibleActions = designTool === 'setup' && mode !== 'scratch'
-    ? [] 
-    : (activeStep === -1 ? actions : actions.slice(0, activeStep + 1));
+  const visibleActions = useMemo(() => {
+    if (designTool === 'setup' && mode !== 'scratch') return [];
+    if (mode !== 'animation') return actions;
+    if (activeStep === -1) return []; // Clean initial court before animation begins
+    if (phases.length === 0) return [];
+    const maxPhase = phases[Math.min(activeStep, phases.length - 1)] || 1;
+    return actions.filter(a => (a.phase || 1) <= maxPhase);
+  }, [designTool, mode, activeStep, actions, phases]);
 
   // Find who currently has the ball
   const ballCarrier = courtPlayers.find(p => p.hasBall);
@@ -275,7 +286,7 @@ export default function Court({
 
   return (
     <div 
-      className={`court-wrapper ${theme}-theme ${courtType === 'full' ? 'full-court-vertical' : 'half-court-view'} ${isEraserActive ? 'eraser-mode-active' : ''}`}
+      className={`court-wrapper ${theme}-theme ${courtType === 'full' ? 'full-court-vertical' : 'half-court-view'} ${isEraserActive ? 'eraser-mode-active' : ''} ${mode === 'animation' ? 'animation-mode' : ''}`}
       ref={containerRef}
       onPointerDown={handleCourtPointerDown}
       onPointerMove={handlePointerMove}
@@ -336,6 +347,18 @@ export default function Court({
             orient="auto-start-reverse"
           >
             <path d="M 1 2 L 11 6 L 1 10 z" fill="#22c55e" stroke="#000000" strokeWidth="1.2" />
+          </marker>
+
+          <marker
+            id="arrow-opponent"
+            viewBox="0 0 12 12"
+            refX="10"
+            refY="6"
+            markerWidth="9"
+            markerHeight="9"
+            orient="auto-start-reverse"
+          >
+            <path d="M 1 2 L 11 6 L 1 10 z" fill="#ef4444" stroke="#000000" strokeWidth="1.2" />
           </marker>
 
           {/* Gradients for court styling */}
@@ -710,7 +733,7 @@ export default function Court({
                       fontFamily="var(--font-display)"
                       pointerEvents="none"
                     >
-                      {idx + 1}
+                      {action.phase || (idx + 1)}
                     </text>
                   </g>
                 </g>
@@ -809,7 +832,7 @@ export default function Court({
                       pointerEvents="none"
                       style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,1)) drop-shadow(0 0 2px rgba(0,0,0,1))' }}
                     >
-                      {idx + 1}
+                      {action.phase || (idx + 1)}
                     </text>
                   </g>
                 </g>
@@ -967,7 +990,7 @@ export default function Court({
                       pointerEvents="none"
                       style={{ filter: 'drop-shadow(0 1px 1px rgba(255,255,255,0.6))' }}
                     >
-                      {idx + 1}
+                      {action.phase || (idx + 1)}
                     </text>
                   </g>
                 </g>
@@ -1005,28 +1028,28 @@ export default function Court({
                     y2={adjustedEndY}
                     stroke="rgba(0, 0, 0, 0.85)"
                     strokeWidth={hasBall ? "11" : "9.5"}
-                    strokeDasharray={hasBall ? "none" : "12 8"}
+                    strokeDasharray={hasBall ? "none" : (action.isOpponent ? "10 6" : "12 8")}
                     strokeLinecap="round"
                     pointerEvents="none"
                   />
-                  {/* Main movement line: Electric cyan if with ball, pure white if without ball */}
+                  {/* Main movement line: Crimson if opponent, Electric cyan if with ball, pure white if without ball */}
                   <line
                     x1={startSvg.x}
                     y1={startSvg.y}
                     x2={adjustedEndX}
                     y2={adjustedEndY}
-                    stroke={hasBall ? "#00e5ff" : "#ffffff"}
+                    stroke={action.isOpponent ? "#ef4444" : (hasBall ? "#00e5ff" : "#ffffff")}
                     strokeWidth={hasBall ? "6.5" : "5.5"}
-                    strokeDasharray={hasBall ? "none" : "12 8"}
+                    strokeDasharray={hasBall ? "none" : (action.isOpponent ? "10 6" : "12 8")}
                     strokeLinecap="round"
-                    markerEnd={hasBall ? "url(#arrow-with-ball)" : "url(#arrow-without-ball)"}
+                    markerEnd={action.isOpponent ? "url(#arrow-opponent)" : (hasBall ? "url(#arrow-with-ball)" : "url(#arrow-without-ball)")}
                     pointerEvents="none"
                   />
-                  {/* Action order badge - Bigger and bold */}
+                  {/* Action order badge - Reflects tactical phase */}
                   <g transform={`translate(${(startSvg.x + endSvg.x) / 2}, ${(startSvg.y + endSvg.y) / 2})`} pointerEvents="all">
                     <circle
                       r="19"
-                      fill={hasBall ? "#0284c7" : "#334155"}
+                      fill={action.isOpponent ? "#dc2626" : (hasBall ? "#0284c7" : "#334155")}
                       stroke="#ffffff"
                       strokeWidth="3"
                       filter="drop-shadow(0 3px 6px rgba(0,0,0,0.85))"
@@ -1040,7 +1063,7 @@ export default function Court({
                       fontFamily="var(--font-display)"
                       pointerEvents="none"
                     >
-                      {idx + 1}
+                      {action.phase || (idx + 1)}
                     </text>
                   </g>
                 </g>

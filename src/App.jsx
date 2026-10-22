@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import './App.css';
 import { 
   INITIAL_ROSTER, 
@@ -106,6 +106,7 @@ export default function App() {
   const [selectedScratchItem, setSelectedScratchItem] = useState(null); // { type: 'player', number } | { type: 'opponent', number } | { type: 'ball' } | null
   const [isEraserActive, setIsEraserActive] = useState(false);
   const [opponentPlayers, setOpponentPlayers] = useState([]); // [{ id, number, x, y, hasBall }]
+  const [initialOpponents, setInitialOpponents] = useState([]);
 
   // Current play metadata
   const [currentPlayName, setCurrentPlayName] = useState('');
@@ -117,14 +118,24 @@ export default function App() {
   // Current court players [{ number, x, y, hasBall }] (max 5)
   const [courtPlayers, setCourtPlayers] = useState([]);
 
-  // Discrete sequence of tactical actions
+  // Discrete sequence of tactical actions (each action has a phase number)
   const [actions, setActions] = useState([]);
+  const [currentPhase, setCurrentPhase] = useState(1);
+
+  // Unique phases extracted from actions
+  const uniquePhases = useMemo(() => {
+    if (actions.length === 0) return [];
+    const set = new Set(actions.map(a => a.phase || 1));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [actions]);
+
+  const totalPhases = uniquePhases.length;
 
   // Mode: 'design' (interactive board & recording) | 'animation' (playback & stepper)
   const [mode, setMode] = useState('design');
 
   // Animation & Stepper state
-  // activeStep: -1 = display final state / full diagram; >= 0 = step index
+  // activeStep: -1 = display initial state; 0..(totalPhases - 1) = phase index
   const [activeStep, setActiveStep] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
@@ -337,17 +348,28 @@ export default function App() {
     }
   }, [savedPlays]);
 
-  // Compute player positions given initial formation and actions up to step
-  const computePlayersAtStep = useCallback((basePlayers, actionList, step) => {
+  // Compute player and opponent positions given initial formation and actions up to target phase index
+  const computeStateAtStep = useCallback((basePlayers, baseOpponents, actionList, targetPhaseIdx) => {
     const players = JSON.parse(JSON.stringify(basePlayers));
-    if (step < 0) return players;
+    const opponents = JSON.parse(JSON.stringify(baseOpponents || []));
+    if (targetPhaseIdx < 0 || actionList.length === 0) {
+      return { players, opponents };
+    }
 
-    const limit = Math.min(step, actionList.length - 1);
-    for (let i = 0; i <= limit; i++) {
-      const act = actionList[i];
-      if (!act) continue;
+    const uniquePhs = Array.from(new Set(actionList.map(a => a.phase || 1))).sort((a, b) => a - b);
+    const maxPhase = uniquePhs[Math.min(targetPhaseIdx, uniquePhs.length - 1)] || 1;
 
-      if (act.type === 'move' || act.type === 'screen') {
+    for (const act of actionList) {
+      if ((act.phase || 1) > maxPhase) continue;
+
+      if (act.isOpponent) {
+        const opp = opponents.find(item => item.id === act.opponentId || item.number === act.opponentNumber);
+        if (opp) {
+          opp.x = act.to.x;
+          opp.y = act.to.y;
+          opp.hasBall = act.hasBall;
+        }
+      } else if (act.type === 'move' || act.type === 'screen') {
         const p = players.find(item => item.number === act.playerId);
         if (p) {
           p.x = act.to.x;
@@ -365,31 +387,48 @@ export default function App() {
       }
     }
 
-    return players;
+    return { players, opponents };
   }, []);
 
-  // Update court players when activeStep or actions change during animation mode
+  // Helper for computing only players
+  const computePlayersAtStep = useCallback((basePlayers, actionList, targetPhaseIdx) => {
+    const { players } = computeStateAtStep(basePlayers, initialOpponents, actionList, targetPhaseIdx);
+    return players;
+  }, [computeStateAtStep, initialOpponents]);
+
+  // Update court players and opponents when activeStep or actions change during animation mode
   useEffect(() => {
     if (mode === 'animation') {
       if (activeStep === -1) {
         // Initial setup
         setCourtPlayers(JSON.parse(JSON.stringify(initialPlayers)));
+        if (initialOpponents.length > 0) {
+          setOpponentPlayers(JSON.parse(JSON.stringify(initialOpponents)));
+        }
       } else {
-        const steppedPlayers = computePlayersAtStep(initialPlayers, actions, activeStep);
+        const { players: steppedPlayers, opponents: steppedOpponents } = computeStateAtStep(
+          initialPlayers,
+          initialOpponents,
+          actions,
+          activeStep
+        );
         setCourtPlayers(steppedPlayers);
+        if (initialOpponents.length > 0) {
+          setOpponentPlayers(steppedOpponents);
+        }
       }
     }
-  }, [mode, activeStep, actions, initialPlayers, computePlayersAtStep]);
+  }, [mode, activeStep, actions, initialPlayers, initialOpponents, computeStateAtStep]);
 
-  // Auto-play timer loop
+  // Auto-play timer loop: steps through each tactical phase with comfortable didactic timing
   useEffect(() => {
     let timer = null;
     if (isPlaying && mode === 'animation') {
-      const intervalMs = Math.round(1400 / playbackSpeed);
+      const intervalMs = Math.round(3200 / playbackSpeed);
 
       timer = setInterval(() => {
         setActiveStep(prev => {
-          if (prev >= actions.length - 1) {
+          if (prev >= totalPhases - 1) {
             setIsPlaying(false);
             return prev;
           }
@@ -401,7 +440,7 @@ export default function App() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [isPlaying, mode, actions.length, playbackSpeed]);
+  }, [isPlaying, mode, totalPhases, playbackSpeed]);
 
   // ==========================================
   // PLAYMAKING ACTIONS & VECTOR RECORDING
@@ -435,9 +474,10 @@ export default function App() {
       // In draw mode, if actions exist, place players at the state corresponding to the actions
       if (actions.length > 0) {
         const base = initialPlayers.length > 0 ? initialPlayers : courtPlayers;
-        const targetStep = activeStep === -1 ? actions.length - 1 : activeStep;
-        const live = computePlayersAtStep(base, actions, targetStep);
+        const targetStep = activeStep === -1 ? totalPhases - 1 : activeStep;
+        const { players: live, opponents: liveOpp } = computeStateAtStep(base, initialOpponents, actions, targetStep);
         setCourtPlayers(live);
+        if (liveOpp.length > 0) setOpponentPlayers(liveOpp);
       } else if (courtPlayers.length > 0) {
         setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
       }
@@ -457,12 +497,43 @@ export default function App() {
     } else {
       // When going to design mode:
       if (actions.length > 0 && initialPlayers.length > 0) {
-        const finalPlayers = computePlayersAtStep(initialPlayers, actions, actions.length - 1);
+        const { players: finalPlayers, opponents: finalOpp } = computeStateAtStep(
+          initialPlayers,
+          initialOpponents,
+          actions,
+          totalPhases - 1
+        );
         setCourtPlayers(finalPlayers);
+        if (finalOpp.length > 0) setOpponentPlayers(finalOpp);
       } else if (courtPlayers.length > 0) {
         setInitialPlayers(JSON.parse(JSON.stringify(courtPlayers)));
       }
     }
+  };
+
+  // Smart Phase Helper: If the player has already executed an action in currentPhase,
+  // automatically advance to the next phase so sequential actions are preserved
+  const getTargetPhaseForPlayer = (playerNumber, isOpponent = false, oppId = null) => {
+    const alreadyActedInCurrentPhase = actions.some(a => {
+      if ((a.phase || 1) !== currentPhase) return false;
+      if (isOpponent) {
+        return a.isOpponent && (a.opponentId === oppId || a.opponentNumber === playerNumber);
+      } else {
+        return !a.isOpponent && (a.playerId === playerNumber || a.fromPlayerId === playerNumber);
+      }
+    });
+
+    if (alreadyActedInCurrentPhase) {
+      const nextPhase = currentPhase + 1;
+      setCurrentPhase(nextPhase);
+      return nextPhase;
+    }
+
+    return currentPhase;
+  };
+
+  const handleNextPhase = () => {
+    setCurrentPhase(prev => prev + 1);
   };
 
   // Coach moves a player on the court
@@ -493,6 +564,9 @@ export default function App() {
     }
 
     // DRAW MODE:
+    // Determine phase for this action (auto-advancing if player already acted in currentPhase)
+    const actionPhase = getTargetPhaseForPlayer(playerNumber, false, null);
+
     // 1. Check if dropped on/near an opponent defender -> CORTINA / BLOQUEO (SCREEN)
     const targetOpp = opponentPlayers.find(o => Math.hypot(o.x - toCoords.x, o.y - toCoords.y) < 8.0);
     if (targetOpp) {
@@ -518,6 +592,7 @@ export default function App() {
         from: fromCoords,
         to: screenSpot,
         screenTarget: { x: targetOpp.x, y: targetOpp.y },
+        phase: actionPhase,
         description: `#${playerNumber} Cortina a Rival #${targetOpp.number}`
       };
 
@@ -553,6 +628,7 @@ export default function App() {
         hasBall: true,
         from: fromCoords,
         to: targetHoop,
+        phase: actionPhase,
         description: `#${playerNumber} Tiro al aro`
       };
 
@@ -576,6 +652,7 @@ export default function App() {
       hasBall: hadBall,
       from: fromCoords,
       to: toCoords,
+      phase: actionPhase,
       description: hadBall 
         ? `#${playerNumber} Dribla con balón` 
         : `#${playerNumber} Corta / se desmarca sin balón`
@@ -607,6 +684,8 @@ export default function App() {
 
     if (!fromP || !toP) return;
 
+    const actionPhase = getTargetPhaseForPlayer(fromNumber, false, null);
+
     const newPassAction = {
       id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
       type: 'pass',
@@ -614,6 +693,7 @@ export default function App() {
       toPlayerId: toNumber,
       from: { x: fromP.x, y: fromP.y },
       to: { x: toP.x, y: toP.y },
+      phase: actionPhase,
       description: `Pase de #${fromNumber} a #${toNumber}`
     };
 
@@ -749,6 +829,7 @@ export default function App() {
       category,
       courtType,
       initialPlayers: JSON.parse(JSON.stringify(initialPlayers)),
+      initialOpponents: JSON.parse(JSON.stringify(initialOpponents)),
       actions: JSON.parse(JSON.stringify(actions)),
       createdAt: new Date().toISOString()
     };
@@ -765,7 +846,21 @@ export default function App() {
 
     setInitialPlayers(JSON.parse(JSON.stringify(play.initialPlayers)));
     setCourtPlayers(JSON.parse(JSON.stringify(play.initialPlayers)));
-    setActions(JSON.parse(JSON.stringify(play.actions || [])));
+
+    if (play.initialOpponents) {
+      setInitialOpponents(JSON.parse(JSON.stringify(play.initialOpponents)));
+      setOpponentPlayers(JSON.parse(JSON.stringify(play.initialOpponents)));
+    }
+
+    // Process actions ensuring phase compatibility
+    const loadedActions = (play.actions || []).map((a, idx) => ({
+      ...a,
+      phase: a.phase !== undefined ? a.phase : (idx + 1)
+    }));
+    setActions(loadedActions);
+
+    const maxPhase = loadedActions.length > 0 ? Math.max(...loadedActions.map(a => a.phase || 1)) : 1;
+    setCurrentPhase(maxPhase);
     
     // Switch directly to animation mode for coach presentation
     setMode('animation');
@@ -782,8 +877,11 @@ export default function App() {
     setCurrentPlayDesc('');
     setCourtPlayers([]);
     setInitialPlayers([]);
+    setOpponentPlayers([]);
+    setInitialOpponents([]);
     setCurrentFormationId(null);
     setActions([]);
+    setCurrentPhase(1);
     setActiveStep(-1);
     setIsPlaying(false);
     setMode('design');
@@ -791,7 +889,7 @@ export default function App() {
   };
 
   // ==========================================
-  // STEPPER CONTROLS (+1 / -1 / RESET / PLAY)
+  // STEPPER CONTROLS (PHASE STEPPER)
   // ==========================================
 
   const handleStepBack = () => {
@@ -801,7 +899,7 @@ export default function App() {
 
   const handleStepForward = () => {
     setIsPlaying(false);
-    setActiveStep(prev => Math.min(actions.length - 1, prev + 1));
+    setActiveStep(prev => Math.min(totalPhases - 1, prev + 1));
   };
 
   const handleResetToStart = () => {
@@ -811,7 +909,7 @@ export default function App() {
 
   const handleGoToEnd = () => {
     setIsPlaying(false);
-    setActiveStep(actions.length - 1);
+    setActiveStep(totalPhases - 1);
   };
 
   const handleUndoLastAction = () => {
@@ -819,14 +917,30 @@ export default function App() {
     const newActions = actions.slice(0, -1);
     setActions(newActions);
 
-    // Recompute player positions to the previous state
-    const stepped = computePlayersAtStep(initialPlayers, newActions, newActions.length - 1);
-    setCourtPlayers(stepped);
+    if (newActions.length === 0) {
+      setCurrentPhase(1);
+      setActiveStep(-1);
+      setCourtPlayers(JSON.parse(JSON.stringify(initialPlayers)));
+      if (initialOpponents.length > 0) setOpponentPlayers(JSON.parse(JSON.stringify(initialOpponents)));
+    } else {
+      const maxP = Math.max(...newActions.map(a => a.phase || 1), 1);
+      setCurrentPhase(maxP);
+      const { players: stepped, opponents: steppedOpp } = computeStateAtStep(
+        initialPlayers,
+        initialOpponents,
+        newActions,
+        newActions.length - 1
+      );
+      setCourtPlayers(stepped);
+      if (initialOpponents.length > 0) setOpponentPlayers(steppedOpp);
+    }
   };
 
   const handleClearActions = () => {
     setActions([]);
+    setCurrentPhase(1);
     setCourtPlayers(JSON.parse(JSON.stringify(initialPlayers)));
+    if (initialOpponents.length > 0) setOpponentPlayers(JSON.parse(JSON.stringify(initialOpponents)));
     setActiveStep(-1);
     setIsPlaying(false);
   };
@@ -899,7 +1013,38 @@ export default function App() {
   };
 
   // Move an opponent player
-  const handleOpponentMove = (oppId, toCoords) => {
+  const handleOpponentMove = (oppId, fromCoords, toCoords) => {
+    if (mode === 'animation') return;
+
+    if (designTool === 'setup') {
+      const updated = opponentPlayers.map(o => o.id === oppId ? { ...o, x: toCoords.x, y: toCoords.y } : o);
+      setOpponentPlayers(updated);
+      setInitialOpponents(JSON.parse(JSON.stringify(updated)));
+      return;
+    }
+
+    // DRAW MODE: Opponent tactical movement (e.g. pressure, trap, defensive rotation)
+    const opp = opponentPlayers.find(o => o.id === oppId);
+    const oppNum = opp ? opp.number : oppId;
+    const oppHadBall = opp ? opp.hasBall : false;
+
+    const actionPhase = getTargetPhaseForPlayer(oppNum, true, oppId);
+
+    const newAction = {
+      id: `act_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
+      type: 'move',
+      isOpponent: true,
+      opponentId: oppId,
+      opponentNumber: oppNum,
+      playerId: null,
+      hasBall: oppHadBall,
+      from: fromCoords,
+      to: toCoords,
+      phase: actionPhase,
+      description: `Rival #${oppNum} Presiona / se desplaza`
+    };
+
+    setActions(prev => [...prev, newAction]);
     setOpponentPlayers(prev => prev.map(o => o.id === oppId ? { ...o, x: toCoords.x, y: toCoords.y } : o));
   };
 
@@ -914,10 +1059,12 @@ export default function App() {
       { id: 5, number: 5, x: 50, y: isHalf ? 18 : 14, hasBall: false }
     ];
     setOpponentPlayers(standardOpponents);
+    setInitialOpponents(JSON.parse(JSON.stringify(standardOpponents)));
   };
 
   // Freestanding ball dragged on court (pass simulation)
   const handleFreeBallMove = (fromCoords, toCoords) => {
+    const actionPhase = currentPhase;
     // Check if passed to an opponent
     const targetOpp = opponentPlayers.find(o => Math.hypot(o.x - toCoords.x, o.y - toCoords.y) < 7);
     // Check if passed to our player
@@ -931,6 +1078,7 @@ export default function App() {
         hasBall: true,
         from: fromCoords,
         to: { x: targetOpp.x, y: targetOpp.y },
+        phase: actionPhase,
         description: `Balón interceptado / posesión Rival #${targetOpp.number}`
       };
       setActions(prev => [...prev, newAction]);
@@ -945,6 +1093,7 @@ export default function App() {
         hasBall: true,
         from: fromCoords,
         to: { x: targetPlayer.x, y: targetPlayer.y },
+        phase: actionPhase,
         description: `Pase a #${targetPlayer.number}`
       };
       setActions(prev => [...prev, newAction]);
@@ -960,6 +1109,7 @@ export default function App() {
         hasBall: true,
         from: fromCoords,
         to: toCoords,
+        phase: actionPhase,
         description: `Balón a espacio libre`
       };
       setActions(prev => [...prev, newAction]);
@@ -970,20 +1120,37 @@ export default function App() {
   // Clear all drawings on court (vectors)
   const handleClearDrawings = () => {
     setActions([]);
+    setCurrentPhase(1);
+    setActiveStep(-1);
+    setIsPlaying(false);
   };
 
   // Return whole team and opponents to bench
   const handleReturnToBench = () => {
     setCourtPlayers([]);
+    setInitialPlayers([]);
     setOpponentPlayers([]);
+    setInitialOpponents([]);
     setFreeBallPos(null);
     setActions([]);
+    setCurrentPhase(1);
+    setActiveStep(-1);
     setSelectedScratchItem(null);
+    setIsPlaying(false);
   };
 
   // Delete a single action (eraser)
   const handleDeleteAction = (actionId) => {
-    setActions(prev => prev.filter(a => a.id !== actionId));
+    setActions(prev => {
+      const updated = prev.filter(a => a.id !== actionId);
+      if (updated.length === 0) {
+        setCurrentPhase(1);
+      } else {
+        const maxP = Math.max(...updated.map(a => a.phase || 1), 1);
+        setCurrentPhase(maxP);
+      }
+      return updated;
+    });
   };
 
   return (
@@ -1052,6 +1219,8 @@ export default function App() {
               designTool={designTool}
               onDesignToolChange={handleDesignToolChange}
               actionsCount={actions.length}
+              currentPhase={currentPhase}
+              onNextPhase={handleNextPhase}
             />
           )}
         </main>
@@ -1087,12 +1256,15 @@ export default function App() {
         onDesignToolChange={handleDesignToolChange}
         actions={actions}
         activeStep={activeStep}
+        currentPhase={currentPhase}
+        totalPhases={totalPhases}
+        onNextPhase={handleNextPhase}
         isPlaying={isPlaying}
         playbackSpeed={playbackSpeed}
         isAssigningBall={isAssigningBall}
         onToggleAssignBall={() => setIsAssigningBall(prev => !prev)}
         onPlay={() => {
-          if (activeStep >= actions.length - 1) {
+          if (activeStep >= totalPhases - 1) {
             setActiveStep(-1); // Reset to start if already at the end
           }
           setIsPlaying(true);
@@ -1130,12 +1302,15 @@ export default function App() {
         onDesignToolChange={handleDesignToolChange}
         actions={actions}
         activeStep={activeStep}
+        currentPhase={currentPhase}
+        totalPhases={totalPhases}
+        onNextPhase={handleNextPhase}
         isPlaying={isPlaying}
         playbackSpeed={playbackSpeed}
         isAssigningBall={isAssigningBall}
         onToggleAssignBall={() => setIsAssigningBall(prev => !prev)}
         onPlay={() => {
-          if (activeStep >= actions.length - 1) {
+          if (activeStep >= totalPhases - 1) {
             setActiveStep(-1);
           }
           setIsPlaying(true);
@@ -1179,18 +1354,18 @@ export default function App() {
           <button 
             className="stepper-mini-btn"
             onClick={handleStepBack}
-            disabled={activeStep <= 0}
-            title="Paso Anterior"
+            disabled={activeStep <= -1}
+            title="Fase Anterior"
           >
             <SkipBack size={14} />
           </button>
           <button 
             className={`stepper-mini-btn play-btn ${isPlaying ? 'playing' : ''}`}
             onClick={isPlaying ? () => setIsPlaying(false) : () => {
-              if (activeStep >= actions.length - 1) setActiveStep(-1);
+              if (activeStep >= totalPhases - 1) setActiveStep(-1);
               setIsPlaying(true);
             }}
-            disabled={actions.length === 0}
+            disabled={totalPhases === 0}
             title={isPlaying ? "Pausar" : "Reproducir"}
           >
             {isPlaying ? <Pause size={16} /> : <Play size={16} style={{ marginLeft: 2 }} />}
@@ -1198,13 +1373,13 @@ export default function App() {
           <button 
             className="stepper-mini-btn"
             onClick={handleStepForward}
-            disabled={activeStep >= actions.length - 1}
-            title="Paso Siguiente"
+            disabled={activeStep >= totalPhases - 1}
+            title="Fase Siguiente"
           >
             <SkipForward size={14} />
           </button>
           <div className="mini-step-text">
-            <span>Paso {actions.length === 0 ? 0 : activeStep === -1 ? actions.length : activeStep + 1}/{actions.length}</span>
+            <span>Fase {totalPhases === 0 ? 0 : activeStep === -1 ? 'Ini' : activeStep + 1}/{totalPhases}</span>
           </div>
         </div>
       )}

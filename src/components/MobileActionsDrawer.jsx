@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { 
   Play, 
   Pause, 
@@ -29,6 +29,9 @@ export default function MobileActionsDrawer({
   onDesignToolChange,
   actions = [],
   activeStep = -1,
+  currentPhase = 1,
+  totalPhases = 0,
+  onNextPhase,
   isPlaying = false,
   playbackSpeed = 1,
   isAssigningBall = false,
@@ -56,8 +59,23 @@ export default function MobileActionsDrawer({
   const touchStartYRef = useRef(0);
 
   const totalSteps = actions.length;
-  const currentStepNum = activeStep === -1 ? totalSteps : activeStep + 1;
-  const currentAction = activeStep >= 0 && activeStep < totalSteps ? actions[activeStep] : null;
+
+  const uniquePhases = useMemo(() => {
+    if (actions.length === 0) return [];
+    const set = new Set(actions.map(a => a.phase || 1));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [actions]);
+
+  const effectiveTotalPhases = totalPhases || uniquePhases.length;
+  const actionsInCurrentPhase = actions.filter(a => (a.phase || 1) === currentPhase);
+
+  // Active phase in animation
+  const activePhaseNum = activeStep >= 0 && activeStep < uniquePhases.length
+    ? uniquePhases[activeStep]
+    : (activeStep + 1);
+
+  const activePhaseActions = actions.filter(a => (a.phase || 1) === activePhaseNum);
+  const activePhaseDesc = activePhaseActions.map(a => a.description).join(' • ');
 
   // Swipe left inside drawer to close
   const handleTouchStart = (e) => {
@@ -234,6 +252,30 @@ export default function MobileActionsDrawer({
                 </button>
               </div>
 
+              {/* Mobile Phase Controller in Draw Mode */}
+              {designTool === 'draw' && (
+                <div className="mobile-phase-row">
+                  <div className="mobile-phase-info">
+                    <span className="mobile-phase-pill">
+                      <span className="phase-dot-live" />
+                      Fase {currentPhase}
+                    </span>
+                    <span className="mobile-phase-sub">
+                      {actionsInCurrentPhase.length === 0 ? 'Sin acciones aún' : `${actionsInCurrentPhase.length} acciones en paralelo`}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="mobile-phase-add-btn"
+                    onClick={onNextPhase}
+                    title="Avanzar a la Siguiente Fase"
+                  >
+                    <Plus size={15} />
+                    <span>Siguiente Fase</span>
+                  </button>
+                </div>
+              )}
+
               {/* Action buttons */}
               <div className="mobile-action-buttons-list">
                 {/* Asignar Balón */}
@@ -329,30 +371,37 @@ export default function MobileActionsDrawer({
               <div className="mobile-animation-status-card">
                 <div className="status-header">
                   <span className="status-step-title">
-                    Paso {totalSteps === 0 ? 0 : currentStepNum} de {totalSteps}
+                    {effectiveTotalPhases === 0 
+                      ? 'Sin fases' 
+                      : activeStep === -1 
+                      ? 'Formación inicial' 
+                      : `Fase ${activeStep + 1} de ${effectiveTotalPhases}`}
                   </span>
                   <span className="status-tag">
-                    {totalSteps === 0 
+                    {effectiveTotalPhases === 0 
                       ? 'Sin acciones' 
                       : activeStep === -1 
                       ? 'Inicio' 
-                      : activeStep === totalSteps - 1 
+                      : activeStep === effectiveTotalPhases - 1 
                       ? 'Final' 
                       : 'En curso'}
                   </span>
                 </div>
                 <p className="status-description">
-                  {currentAction ? currentAction.description : (totalSteps === 0 ? 'Traza movimientos primero en modo Jugada' : 'Formación inicial')}
+                  {effectiveTotalPhases === 0 
+                    ? 'Traza movimientos primero en modo Jugada' 
+                    : activeStep === -1 
+                    ? 'Formación inicial (antes de ejecutar la jugada)' 
+                    : `${activePhaseActions.length} acción(es) en paralelo: ${activePhaseDesc || 'Movimientos simultáneos'}`}
                 </p>
 
                 {/* Progress bar / Scrubber dots */}
                 <div className="mobile-scrubber-row">
-                  {Array.from({ length: totalSteps }).map((_, i) => (
+                  {Array.from({ length: effectiveTotalPhases }).map((_, i) => (
                     <button
                       key={i}
                       className={`mobile-scrubber-dot ${i <= activeStep ? 'filled' : ''} ${i === activeStep ? 'current' : ''}`}
-                      onClick={() => onStepForward ? onGoToEnd : null}
-                      title={`Ir a paso ${i + 1}`}
+                      title={`Fase ${i + 1}`}
                     />
                   ))}
                 </div>
@@ -369,12 +418,12 @@ export default function MobileActionsDrawer({
                   <RotateCcw size={16} />
                 </button>
 
-                {/* Step Back (-1) */}
+                {/* Step Back (-1 Phase) */}
                 <button
                   className="transport-circle-btn"
                   onClick={onStepBack}
-                  disabled={activeStep <= 0}
-                  title="Paso Anterior"
+                  disabled={activeStep <= -1}
+                  title="Fase Anterior"
                 >
                   <SkipBack size={18} />
                 </button>
@@ -389,18 +438,18 @@ export default function MobileActionsDrawer({
                       onPlay?.();
                     }
                   }}
-                  disabled={totalSteps === 0}
+                  disabled={effectiveTotalPhases === 0}
                   title={isPlaying ? "Pausar animación" : "Reproducir animación"}
                 >
                   {isPlaying ? <Pause size={22} /> : <Play size={22} style={{ marginLeft: 3 }} />}
                 </button>
 
-                {/* Step Forward (+1) */}
+                {/* Step Forward (+1 Phase) */}
                 <button
                   className="transport-circle-btn"
                   onClick={onStepForward}
-                  disabled={activeStep >= totalSteps - 1}
-                  title="Paso Siguiente"
+                  disabled={activeStep >= effectiveTotalPhases - 1}
+                  title="Fase Siguiente"
                 >
                   <SkipForward size={18} />
                 </button>

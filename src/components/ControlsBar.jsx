@@ -23,6 +23,9 @@ export default function ControlsBar({
   onDesignToolChange,
   actions = [],
   activeStep = -1,
+  currentPhase = 1,
+  totalPhases = 0,
+  onNextPhase,
   isPlaying = false,
   playbackSpeed = 1,
   isAssigningBall = false,
@@ -46,8 +49,23 @@ export default function ControlsBar({
   onReturnToBench
 }) {
   const totalSteps = actions.length;
-  const currentStepNum = activeStep === -1 ? totalSteps : activeStep + 1;
-  const currentAction = activeStep >= 0 && activeStep < totalSteps ? actions[activeStep] : null;
+
+  const uniquePhases = React.useMemo(() => {
+    if (actions.length === 0) return [];
+    const set = new Set(actions.map(a => a.phase || 1));
+    return Array.from(set).sort((a, b) => a - b);
+  }, [actions]);
+
+  const effectiveTotalPhases = totalPhases || uniquePhases.length;
+  const actionsInCurrentPhase = actions.filter(a => (a.phase || 1) === currentPhase);
+
+  // Active phase in animation
+  const activePhaseNum = activeStep >= 0 && activeStep < uniquePhases.length
+    ? uniquePhases[activeStep]
+    : (activeStep + 1);
+
+  const activePhaseActions = actions.filter(a => (a.phase || 1) === activePhaseNum);
+  const activePhaseDesc = activePhaseActions.map(a => a.description).join(' • ');
 
   return (
     <footer className="controls-bar">
@@ -126,6 +144,26 @@ export default function ControlsBar({
                 <span>Ubicar</span>
               </button>
             </div>
+
+            {/* Phase indicator in Scratch Draw Mode */}
+            {designTool === 'draw' && (
+              <div className="phase-control-cluster">
+                <span className="phase-badge-pill" title="Fase táctica: todas las acciones que traces en esta fase se ejecutan en paralelo">
+                  <span className="phase-dot-live" />
+                  <span>Fase {currentPhase}</span>
+                  <span className="phase-count-sub">({actionsInCurrentPhase.length} sim.)</span>
+                </span>
+                <button
+                  type="button"
+                  className="phase-advance-btn"
+                  onClick={onNextPhase}
+                  title="Avanzar a la Siguiente Fase"
+                >
+                  <Plus size={14} />
+                  <span className="desktop-only">+ Fase</span>
+                </button>
+              </div>
+            )}
 
             <div className="toolbar-divider" />
 
@@ -206,6 +244,26 @@ export default function ControlsBar({
               </button>
             </div>
 
+            {/* Phase indicator in Playmaking Draw Mode */}
+            {designTool === 'draw' && (
+              <div className="phase-control-cluster">
+                <span className="phase-badge-pill" title="Fase táctica: todas las acciones que traces en esta fase se reproducen al mismo tiempo">
+                  <span className="phase-dot-live" />
+                  <span>Fase {currentPhase}</span>
+                  <span className="phase-count-sub">({actionsInCurrentPhase.length} sim.)</span>
+                </span>
+                <button
+                  type="button"
+                  className="phase-advance-btn"
+                  onClick={onNextPhase}
+                  title="Avanzar a Siguiente Fase (las acciones siguientes se reproducirán después)"
+                >
+                  <Plus size={14} />
+                  <span className="desktop-only">Siguiente Fase</span>
+                </button>
+              </div>
+            )}
+
             <div className="toolbar-divider desktop-only" />
 
             {/* Assign Ball Toggle */}
@@ -277,12 +335,12 @@ export default function ControlsBar({
                 <RotateCcw size={15} />
               </button>
 
-              {/* Step Backward (-1) */}
+              {/* Step Backward (-1 Phase) */}
               <button
                 className="step-circle-btn"
                 onClick={onStepBack}
-                disabled={activeStep <= 0}
-                title="Paso Anterior (-1 acción)"
+                disabled={activeStep <= -1}
+                title="Fase Anterior"
               >
                 <SkipBack size={16} />
               </button>
@@ -291,38 +349,49 @@ export default function ControlsBar({
               <button
                 className={`step-circle-btn play-main ${isPlaying ? 'playing' : ''}`}
                 onClick={isPlaying ? onPause : onPlay}
-                disabled={totalSteps === 0}
+                disabled={effectiveTotalPhases === 0}
                 title={isPlaying ? "Pausar animación" : "Iniciar animación completa"}
               >
                 {isPlaying ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: 2 }} />}
               </button>
 
-              {/* Step Forward (+1) */}
+              {/* Step Forward (+1 Phase) */}
               <button
                 className="step-circle-btn"
                 onClick={onStepForward}
-                disabled={activeStep >= totalSteps - 1}
-                title="Paso Siguiente (+1 acción)"
+                disabled={activeStep >= effectiveTotalPhases - 1}
+                title="Fase Siguiente"
               >
                 <SkipForward size={16} />
               </button>
             </div>
 
-            {/* Current Step Tracker & Description */}
+            {/* Current Phase Tracker & Description */}
             <div className="step-info-display desktop-only">
               <div className="step-indicator-text">
-                <span className="step-num">Paso {totalSteps === 0 ? 0 : currentStepNum} de {totalSteps}</span>
-                <span className="step-desc">
-                  {currentAction ? currentAction.description : (totalSteps === 0 ? 'No hay acciones' : 'Formación inicial')}
+                <span className="step-num">
+                  {effectiveTotalPhases === 0 
+                    ? 'Sin fases' 
+                    : activeStep === -1 
+                    ? 'Inicio' 
+                    : `Fase ${activeStep + 1} de ${effectiveTotalPhases}`}
+                </span>
+                <span className="step-desc" title={activePhaseDesc}>
+                  {effectiveTotalPhases === 0 
+                    ? 'No hay acciones' 
+                    : activeStep === -1 
+                    ? 'Formación inicial (antes de jugar)' 
+                    : `${activePhaseActions.length} acción(es) simultánea(s): ${activePhaseDesc || 'Movimientos paralelos'}`}
                 </span>
               </div>
 
-              {/* Mini scrubber dots */}
+              {/* Mini scrubber dots for phases */}
               <div className="step-dots">
-                {Array.from({ length: totalSteps }).map((_, i) => (
+                {Array.from({ length: effectiveTotalPhases }).map((_, i) => (
                   <span
                     key={i}
                     className={`step-dot ${i <= activeStep ? 'filled' : ''} ${i === activeStep ? 'current' : ''}`}
+                    title={`Fase ${i + 1}`}
                   />
                 ))}
               </div>
